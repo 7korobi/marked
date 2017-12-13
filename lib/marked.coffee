@@ -22,6 +22,17 @@ unescape = (html) ->
       return if n.charAt(1) == 'x' then String.fromCharCode(parseInt(n.substring(2), 16)) else String.fromCharCode(+n.substring(1))
     ''
 
+slugo = (input)->
+  input
+  # Remove html tags
+  .replace(/<(?:.|\n)*?>/gm, '')
+  # Remove special characters
+  .replace(/[!\"#$%&'\(\)\*\+,\/:;<=>\?\@\[\\\]\^`\{\|\}~]/g, '')
+  # Replace dots and spaces with a separator
+  .replace(/(\s|\.)/g, '-')
+  # Make the whole thing lowercase
+  .toLowerCase()
+
 replace = (regex, opt) ->
   regex = regex.source
   opt = opt or ''
@@ -570,7 +581,7 @@ class Renderer
     html
 
   heading: (text, level, raw) ->
-    id = @options.headerPrefix + raw.toLowerCase().replace(/[^\w]+/g, '-')
+    id = @options.headerPrefix + slugo raw
     """<h#{level} id="#{ id }">#{ text }</h#{level}>"""
 
   hr: ->
