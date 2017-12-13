@@ -1,14 +1,22 @@
-# marked
+# marked-pre
 
-> A full-featured markdown parser and compiler, written in JavaScript. Built
-> for speed.
 
-[![NPM version](https://badge.fury.io/js/marked.png)][badge]
+[![NPM version](https://img.shields.io/npm/v/marked-pre.svg?style=flat)](https://npmjs.com/package/marked-pre) [![NPM downloads](https://img.shields.io/npm/dm/marked-pre.svg?style=flat)](https://npmjs.com/package/marked-pre) [![Build Status](https://img.shields.io/circleci/project/egoist/marked-pre/master.svg?style=flat)](https://circleci.com/gh/egoist/marked-pre) [![codecov](https://codecov.io/gh/egoist/marked-pre/branch/master/graph/badge.svg)](https://codecov.io/gh/egoist/marked-pre)
 
+
+> This is a fork of [marked](https://github.com/chjj/marked)
+
+**Why?**
+
+- Actively maintained
+- for 人狼議事 (https://giji.f5.si)
+  - vdom children needs single dom.
+  - pre / pre-wrap style.
+ 
 ## Install
 
 ``` bash
-npm install marked --save
+yarn add marked-pre
 ```
 
 ## Usage
@@ -16,7 +24,7 @@ npm install marked --save
 Minimal usage:
 
 ```js
-var marked = require('marked');
+var marked = require('marked-pre');
 console.log(marked('I am using __markdown__.'));
 // Outputs: <p>I am using <strong>markdown</strong>.</p>
 ```
@@ -24,13 +32,12 @@ console.log(marked('I am using __markdown__.'));
 Example setting options with default values:
 
 ```js
-var marked = require('marked');
+var marked = require('marked-pre');
 marked.setOptions({
+  tag: "article",
   renderer: new marked.Renderer(),
-  gfm: true,
   tables: true,
   breaks: false,
-  pedantic: false,
   sanitize: false,
   smartLists: true,
   smartypants: false
@@ -93,7 +100,7 @@ A function to highlight code blocks. The first example below uses async highligh
 [highlight.js][highlight]:
 
 ```js
-var marked = require('marked');
+var marked = require('marked-pre');
 
 var markdownString = '```js\n console.log("hello"); \n```';
 
@@ -155,7 +162,7 @@ The renderer option allows you to render tokens in a custom manner. Here is an
 example of overriding the default heading token rendering by adding an embedded anchor tag like on GitHub:
 
 ```javascript
-var marked = require('marked');
+var marked = require('marked-pre');
 var renderer = new marked.Renderer();
 
 renderer.heading = function (text, level) {
@@ -313,21 +320,6 @@ disadvantage in the benchmarks above.
 Along with implementing every markdown feature, marked also implements [GFM
 features][gfmf].
 
-## Benchmarks
-
-node v0.8.x
-
-``` bash
-$ node test --bench
-marked completed in 3411ms.
-marked (gfm) completed in 3727ms.
-marked (pedantic) completed in 3201ms.
-robotskirt completed in 808ms.
-showdown (reuse converter) completed in 11954ms.
-showdown (new converter) completed in 17774ms.
-markdown-js completed in 17191ms.
-```
-
 __Marked is now faster than Discount, which is written in C.__
 
 For those feeling skeptical: These benchmarks run the entire markdown test suite 1000 times. The test suite tests every feature. It doesn't cater to specific aspects.
@@ -350,7 +342,7 @@ console.log(lexer.rules);
 
 ``` bash
 $ node
-> require('marked').lexer('> i am using marked.')
+> require('marked-pre').lexer('> i am using marked.')
 [ { type: 'blockquote_start' },
   { type: 'paragraph',
     text: 'i am using marked.' },
@@ -393,10 +385,11 @@ all code is your original work. `</legalese>`
 
 ## License
 
-Copyright (c) 2011-2014, Christopher Jeffrey. (MIT License)
+MIT (http://www.opensource.org/licenses/mit-license.php)
 
 See LICENSE for more info.
 
+[marked]: https://github.com/chjj/marked
 [gfm]: https://help.github.com/articles/github-flavored-markdown
 [gfmf]: http://github.github.com/github-flavored-markdown/
 [pygmentize]: https://github.com/rvagg/node-pygmentize-bundled

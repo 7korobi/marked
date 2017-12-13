@@ -101,6 +101,7 @@ block.gfm = Object.assign {}, block.normal,
   fences: /^ *(`{3,}|~{3,})[ \.]*(\S+)? *\n([\s\S]*?)\s*\1 *(\n|$)/
   paragraph: /^/
   heading: /^ *(#{1,6}) +([^\n]+?) *#* *(\n|$)/
+  checkbox: /^\[([ x])\] +/
 
 block.gfm.paragraph = replace(block.paragraph
 )( '(?!', '(?!'
@@ -361,11 +362,6 @@ inline.reflink = replace(inline.reflink)('inside', inline._inside)()
 # Normal Inline Grammar
 inline.normal = Object.assign({}, inline)
 
-# Pedantic Inline Grammar
-inline.pedantic = Object.assign({}, inline.normal,
-  strong: /^__(?=\S)([\s\S]*?\S)__(?!_)|^\*\*(?=\S)([\s\S]*?\S)\*\*(?!\*)/
-  em: /^_(?=\S)([\s\S]*?\S)_(?!_)|^\*(?=\S)([\s\S]*?\S)\*(?!\*)/)
-
 # GFM Inline Grammar
 inline.gfm = Object.assign({}, inline.normal,
   escape: replace(inline.escape)('])', '~|])')()
@@ -397,8 +393,6 @@ class InlineLexer
         @rules = inline.breaks
       else
         @rules = inline.gfm
-    else if @options.pedantic
-      @rules = inline.pedantic
 
   output: (src) ->
     out = ''
@@ -753,7 +747,7 @@ class Parser
 
       when 'html'
         html =
-          if !@token.pre and !@options.pedantic
+          if !@token.pre
           then @inline.output(@token.text)
           else @token.text
         @renderer.html(html)
@@ -841,7 +835,6 @@ marked.defaults =
   gfm: true
   tables: true
   breaks: false
-  pedantic: false
   sanitize: false
   sanitizer: null
   mangle: true
