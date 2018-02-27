@@ -75,7 +75,7 @@ block =
   heading: /^ *(#{1,6}) *([^\n]+?) *#* *(?:\n|$)/
   nptable: noop
   blockquote: /^( {0,3}> ?(paragraph|[^\n]*)(?:\n|$))+/
-  list: /^( *)(bull)[\s\S]+?(?:hr|def|\n{2,}(?! )(?!\1bull)\n*|\s*$)/
+  list: /^( *)(bull) [\s\S]+?(?:hr|def|\n{2,}(?! )(?!\1bull )\n*|\s*$)/
   html: /^ *(?:comment *(?:\n|\s*$)|closed *(?:\n{2,}|\s*$)|closing *(?:\n{2,}|\s*$))/
   def: /^ {0,3}\[(label)\]: *\n? *<?([^\s>]+)>?(?:(?: +\n? *| *\n *)(title))? *(?:\n|$)/
   table: noop
@@ -90,9 +90,9 @@ block.def = replace(block.def
 )( 'title', block._title
 )()
 
-block.bullet = /(?:[*+-] |\d+\.)/
 block.with_bullet = /^ *([*+-]|\d+\.) +/
-block.item = /^( *)(bull)[^\n]*(?:\n(?!\1bull)[^\n]*)*/
+block.bullet = /(?:[*+-]|\d+\.)/;
+block.item = /^( *)(bull) [^\n]*(?:\n(?!\1bull )[^\n]*)*/
 block.item = replace(block.item, 'gm'
 )( /bull/g, block.bullet
 )()
