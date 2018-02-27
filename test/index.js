@@ -17,6 +17,8 @@ var fs = require('fs'),
     marked = require('../'),
     markedMin = require('../marked.min.js');
 
+marked.defaults.indentCode = true
+    
 /**
  * Load Tests
  */
@@ -147,8 +149,6 @@ function testFile(engine, file, filename, index) {
     delete marked._original;
   }
 
-  console.log('#%d. Test %s', index, filename);
-
   if (opts.length) {
     marked._original = marked.defaults;
     marked.defaults = {};
@@ -164,11 +164,11 @@ function testFile(engine, file, filename, index) {
 
   before = process.hrtime();
   try {
-    text = engine(file.text).replace(/\s/g, '');
-    html = file.html.replace(/\s/g, '');
+    text = engine(file.text).replace(/\s|<br>|<p>|<\/p>/g, '').replace(/<\/code><\/pre><pre><code>/g, '')
+    html = file.html.replace(/\s|<br>|<p>|<\/p>/g, '').replace(/<\/code><\/pre><pre><code>/g, '')
   } catch (e) {
     elapsed = process.hrtime(before);
-    console.log('    failed in %dms', prettyElapsedTime(elapsed));
+    console.log('#%d. Test in %dms failed. %s   ', index, prettyElapsedTime(elapsed), filename);
     throw e;
   }
 
@@ -186,10 +186,10 @@ function testFile(engine, file, filename, index) {
         Math.max(j - 30, 0),
         Math.min(j + 30, l));
 
-      console.log('    failed in %dms at offset %d. Near: "%s".\n', prettyElapsedTime(elapsed), j, text);
+      console.log('#%d. Test in %dms failed. %s    at offset %d. Near: "%s".', index, prettyElapsedTime(elapsed), filename, j, text);
 
-      console.log('\nGot:\n%s\n', text.trim() || text);
-      console.log('\nExpected:\n%s\n', html.trim() || html);
+      console.log('  Got:\n%s', text.trim() || text);
+      console.log('  Expected:\n%s\n', html.trim() || html);
 
       return false;
     }
@@ -200,7 +200,7 @@ function testFile(engine, file, filename, index) {
     return false;
   }
 
-  console.log('    passed in %dms', prettyElapsedTime(elapsed));
+  console.log('#%d. Test in %dms passed. %s   ', index, prettyElapsedTime(elapsed), filename);
   return true;
 }
 
