@@ -747,7 +747,6 @@ class Renderer
     """<del>#{ text }</del>"""
 
   link: (href, title, text) ->
-    console.log href, title, text
     if @options.sanitize
       try
         prot =
