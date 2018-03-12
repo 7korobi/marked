@@ -2,7 +2,7 @@
 
 escape = (html, encode) ->
   amp =
-    if encode 
+    if encode
     then /&/g
     else /&(?!#?\w+;)/g
   html
@@ -13,7 +13,7 @@ escape = (html, encode) ->
   .replace /'/g, '&#39;'
 
 unescape = (html) ->
-  # explicitly match decimal, hex, and named HTML entities 
+  # explicitly match decimal, hex, and named HTML entities
   html.replace /&(#(?:\d+)|(?:#x[0-9A-Fa-f]+)|(?:\w+));?/ig, (_, n) ->
     n = n.toLowerCase()
     if n == 'colon'
@@ -67,7 +67,7 @@ replace = (regex, opt) ->
 
 
 # Block Lexer
-block = 
+block =
   newline: /^\n+/
   code: /^( {4}[^\n]+\n*)+/
   fences: noop
@@ -91,7 +91,7 @@ block.def = replace(block.def
 )()
 
 block.with_bullet = /^ *([*+-]|\d+\.) +/
-block.bullet = /(?:[*+-]|\d+\.)/;
+block.bullet = /(?:[*+-]|\d+\.)/
 block.item = /^( *)(bull) [^\n]*(?:\n(?!\1bull )[^\n]*)*/
 block.item = replace(block.item, 'gm'
 )( /bull/g, block.bullet
@@ -104,15 +104,15 @@ block.list = replace(block.list
 )()
 
 block._tag = ('(?!(?:'
-)+( 'a|em|strong|small|s|cite|q|dfn|abbr|data|time|code'
-)+( '|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo'
-)+( '|span|br|wbr|ins|del|img)\\b)\\w+(?!:/|[^\\w\\s@]*@)\\b'
+) + ( 'a|em|strong|small|s|cite|q|dfn|abbr|data|time|code'
+) + ( '|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo'
+) + ( '|span|br|wbr|ins|del|img)\\b)\\w+(?!:/|[^\\w\\s@]*@)\\b'
 )
 
 block.html = replace(block.html
 )( 'comment', /<!--[\s\S]*?-->/
 )( 'closed', /<(tag)[\s\S]+?<\/\1>/
-)( 'closing', /<tag(?:"[^"]*"|'[^']*'|[^'">])*?>/
+)( 'closing', /<tag(?:"[^"]*"|'[^']*'|[^'">\s])*?>/
 )( /tag/g, block._tag
 )()
 
@@ -335,7 +335,7 @@ class Lexer
           text: cap[0]
         continue
 
-      # def    
+      # def
       if !bq and top and cap = @rules.def.exec src
         # console.log 'def', cap
         src = src[cap[0].length ..]
@@ -405,7 +405,7 @@ class Lexer
 
 
 # Inline Lexer & Compiler
-inline = 
+inline =
   escape: /^\\([\\`*{}\[\]()#+\-.!_>])/
   autolink: /^<(scheme:[^\s\x00-\x1f<>]*|email)>/
   anker: /^-(-\w+){1,5}/
@@ -422,7 +422,13 @@ inline =
   text: /^[\s\S]+?(?=[\\<!\[`*]|\b_| {2,}\n|$)/
 
   _scheme: /[a-zA-Z][a-zA-Z0-9+.-]{1,31}/
-  _email: /[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+(@)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(?![-_])/
+  _email: ///
+    [a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+
+    (@)
+    [a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?
+    (?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+
+    (?![-_])
+  ///
   _inside: /(?:\[[^\[\]]*\]|\\[\[\]]|[^\[\]]|\](?=[^\[]*\]))*/
   _href: /\s*<?([\s\S]*?)>?(?:\s+['"]([\s\S]*?)['"])?\s*/
 
@@ -539,7 +545,7 @@ class InlineLexer
         src = src[cap[0].length ..]
         out += (
           if @options.sanitize
-            if @options.sanitizer 
+            if @options.sanitizer
             then @options.sanitizer cap[0]
             else escape cap[0]
           else
@@ -782,7 +788,7 @@ class Renderer
 # returns only the textual part of the token
 # no need for block level renderers
 class TextRenderer
-  f_nop = ()-> ''
+  f_nop = -> ''
   f_text = (text)-> text
   f_link = (href, title, text)-> "#{text}"
   strong: f_text
@@ -1038,4 +1044,3 @@ marked.inlineLexer = InlineLexer.output
 marked.parse = marked
 
 module.exports = marked
-
