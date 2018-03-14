@@ -8,11 +8,9 @@ This is the [simple case].
 
 
 
-This one has a [line
-break].
+This one has a [line break].
 
-This one has a [line 
-break] with a line-ending space.
+This one has a [line break] with a line-ending space.
 
 [line break]: /foo
 
