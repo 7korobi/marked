@@ -2,7 +2,7 @@
   "name": "marked-pre",
   "description": "A markdown parser built for speed",
   "author": "7korobi",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "main": "./lib/marked.js",
   "bin": "./bin/marked",
   "man": "./man/marked.1",
@@ -40,6 +40,7 @@
     "jasmine2-custom-message": "^0.9.0",
     "markdown": "*",
     "markdown-it": "*",
+    
     "showdown": "*",
     "uglify-js": "^3.3.10"
   },
