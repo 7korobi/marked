@@ -2,7 +2,7 @@
   "name": "marked-pre",
   "description": "A markdown parser built for speed",
   "author": "7korobi",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "main": "./lib/marked.js",
   "bin": "./bin/marked",
   "man": "./man/marked.1",

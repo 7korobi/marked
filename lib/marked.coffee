@@ -850,7 +850,7 @@ class Renderer
     else """<img src="#{ href }" alt="#{ text }">"""
 
   anker: (code)->
-    """<code chat_id="#{code}">--#{code}</code>"""
+    """<q cite="#{code}">--#{code}</q>"""
 
   text: (text) ->
     text
