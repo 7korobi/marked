@@ -837,7 +837,7 @@ class Renderer
       """<ruby>#{text}<rp>《</rp><rt>#{ruby}</rt><rp>》</rp></ruby>"""
 
   note: (num, title)->
-    """<sup class="note" title="#{ title }">[#{ num }]</sup>"""
+    """<sup class="note" title="#{ title }">#{ num }</sup>"""
 
   link: (href, title, text) ->
     if title
