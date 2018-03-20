@@ -832,7 +832,7 @@ class Renderer
 
   ruby: (ruby, title, text)->
     if title
-      """<span class="btn" title="#{title}"><ruby>#{text}<rp>《</rp><rt>#{ruby}</rt><rp>》</rp></ruby></span>"""
+      """<span title="#{title}"><ruby>#{text}<rp>《</rp><rt>#{ruby}</rt><rp>》</rp></ruby></span>"""
     else
       """<ruby>#{text}<rp>《</rp><rt>#{ruby}</rt><rp>》</rp></ruby>"""
 
