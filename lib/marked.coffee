@@ -421,7 +421,7 @@ inline =
   code: /^(`+)\s*([\s\S]*?[^`]?)\s*\1(?!`)/
   br: /^ {2,}\n(?!\s*$)/
   del: noop
-  text: /^[\s\S]+?(?=[\\<!\[`*]|\b_| {2,}\n|$)/
+  text: /^[\s\S]+?(?=[\\<!\[`*-]|\b_| {2,}\n|$)/
 
   _scheme: /[a-zA-Z][a-zA-Z0-9+.-]{1,31}/
   _email: ///
@@ -457,7 +457,7 @@ inline.normal = Object.assign({}, inline)
 # GFM Inline Grammar
 inline.gfm = Object.assign({}, inline.normal,
   escape: /^\\([\\`*{}\[\]()#+^~\-.!_>|])/
-  text: /^[\s\S]+?(?=[\\^~<!\[`*]|\b_| {2,}\n|https?:\/\/|ftp:\/\/|www\.|[a-zA-Z0-9.!#$%&\'*+\/=?^_`{|}~-]+@|$)/
+  text: /^[\s\S]+?(?=[\\^~<!\[`*-]|\b_| {2,}\n|https?:\/\/|ftp:\/\/|www\.|[a-zA-Z0-9.!#$%&\'*+\/=?^_`{|}~-]+@|$)/
 
   url: /^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/
   _backpedal: /(?:[^?!.,:;*_~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_~)]+(?!$))+/
