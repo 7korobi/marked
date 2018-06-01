@@ -47,6 +47,21 @@ resolveUrl = (base, href)->
     else
       base + href
 
+splitCells = (tableRow, count)->
+  cells = tableRow.replace(/([^\\])\|/g, '$1 |').split(/ +\| */)
+  i = 0
+
+  if cells.length > count
+    cells.splice count
+  else
+    while cells.length < count
+      cells.push ''
+
+  for o, i in cells
+    cells[i] = o.replace(/\\\|/g, '|')
+  cells
+
+
 baseUrls = {}
 originIndependentUrl = /^$|^[a-z][a-z0-9+.-]*:|^[?#]/i
 
@@ -54,7 +69,7 @@ noop = ->
 noop.exec = noop
 
 replace = (regex, opt) ->
-  regex = regex.source
+  regex = regex.source or regex
   opt = opt or ''
   self = (name, val) ->
     if !name
@@ -65,26 +80,39 @@ replace = (regex, opt) ->
     self
   self
 
-
+###
 # Block Lexer
+###
 block =
   newline: /^ *\n+/
   code: /^( {4}[^\n]+\n*)+/
   fences: noop
   hr: /^ {0,3}((?:- *){3,}|(?:_ *){3,}|(?:\* *){3,})(?:\n|$)/
-  heading: /^ *(#{1,6}) *([^\n]+?) *#* *(?:\n|$)/
+  heading: /^ *(#{1,6}) *([^\n]+?) *(?:#+ *)?(?:\n|$)/
   nptable: noop
   blockquote: /^( {0,3}> ?(paragraph|[^\n]*)(?:\n|$))+/
   list: /^( *)(bull) [\s\S]+?(?:hr|def|\n{2,}(?! )(?!\1bull )\n*|\s*$)/
-  html: /^ *(?:comment *(?:\n|\s*$)|closed *(?:\n{2,}|\s*$)|closing *(?:\n{2,}|\s*$))/
+  checkbox: /^\[([ xX])\] +/
+  html: ///
+    ^\ {0,3}(?: # optional indentation
+    <(script|pre|style)[\s>][\s\S]*?(?:</\1>[^\n]*\n+|$) # (1)
+    |comment[^\n]*(\n+|$) # (2)
+    |<\?[\s\S]*?\?>\n* # (3)
+    |<![A-Z][\s\S]*?>\n* # (4)
+    |<!\[CDATA\[[\s\S]*?\]\]>\n* # (5)
+    |</?(tag)(?:\ +|\n|/?>)[\s\S]*?(?:\n{2,}|$) # (6)
+    |<(?!script|pre|style)([a-z][\w-]*)(?:attribute)*?\ */?>(?=\h*\n)[\s\S]*?(?:\n{2,}|$) # (7) open tag
+    |</(?!script|pre|style)[a-z][\w-]*\s*>(?=\h*\n)[\s\S]*?(?:\n{2,}|$) # (7) closing tag
+    )
+  ///
   def: /^ {0,3}\[(label)\]: *\n? *<?([^\s>]+)>?(?:(?: +\n? *| *\n *)(title))? *(?:\n|$)/
   table: noop
   lheading: /^([^\n]+)\n *(=|-){2,} *(?:\n|$)/
-  paragraph: /^([^\n]+(?:\n?(?!hr|heading|lheading| {0,3}>|tag)[^\n]+)+)/
+  paragraph: /^([^\n]+(?:\n(?!hr|heading|lheading| {0,3}>|<\/?(?:tag)(?: +|\n|\/?>)|<(?:script|pre|style|!--))[^\n]+)*)/
   text: /^[^\n]+/
 
-block._label = /(?:\\[\[\]]|[^\[\]])+/
-block._title = /(?:"(?:\\"|[^"]|"[^"\n]*")*"|'\n?(?:[^'\n]+\n?)*'|\([^()]*\))/
+block._label = /(?!\s*\])(?:\\[\[\]]|[^\[\]])+/
+block._title = /(?:"(?:\\"?|[^"\\])*"|'[^'\n]*(?:\n[^'\n]+)*\n?'|\([^()]*\))/
 block.def = replace(block.def
 )( 'label', block._label
 )( 'title', block._title
@@ -103,59 +131,60 @@ block.list = replace(block.list
 )( 'def', '\\n+(?=' + block.def.source + ')'
 )()
 
-block._tag = ('(?!(?:'
-) + ( 'a|em|strong|small|s|cite|q|dfn|abbr|data|time|code'
-) + ( '|var|samp|kbd|sub|sup|i|b|u|mark|ruby|rt|rp|bdi|bdo'
-) + ( '|span|br|wbr|ins|del|img)\\b)\\w+(?!:/|[^\\w\\s@]*@)\\b'
-)
+block._tag = ///
+  address|article|aside|base|basefont|blockquote|body|caption
+  |center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption
+  |figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe
+  |legend|li|link|main|menu|menuitem|meta|nav|noframes|ol|optgroup|option
+  |p|param|section|source|summary|table|tbody|td|tfoot|th|thead|title|tr
+  |track|ul
+///
 
-block.html = replace(block.html
-)( 'comment', /<!--[\s\S]*?-->/
-)( 'closed', /<(tag)[\s\S]+?<\/\1>/
-)( 'closing', /<tag(?:"[^"]*"|'[^']*'|[^'">\s])*?>/
-)( /tag/g, block._tag
+block._comment = /<!--(?!-?>)[\s\S]*?-->/
+block.html = replace(block.html, 'i'
+)( 'comment', block._comment
+)( 'tag', block._tag
+)('attribute', / +[a-zA-Z:_][\w.:-]*(?: *= *"[^"\n]*"| *= *'[^'\n]*'| *= *[^\s"'=<>`]+)?/
 )()
 
-base_paragraph = /^((?:[^\n]+\n?(?!fences|list|hr|heading|lheading|blockquote|tag|def))+)\n*/
-block.paragraph = replace(base_paragraph
-)( 'fences|list', ""
+block.paragraph = replace(block.paragraph
 )( 'hr', block.hr
 )( 'heading', block.heading
 )( 'lheading', block.lheading
-)( 'tag', '<' + block._tag
+)( 'tag', block._tag
 )()
 
 block.blockquote = replace(block.blockquote
 )( 'paragraph', block.paragraph
 )()
 
-
+###
 # Normal Block Grammar
+###
 block.normal = Object.assign {}, block
 
+###
 # GFM Block Grammar
+###
 block.gfm = Object.assign {}, block.normal,
   fences: /^ *(`{3,}|~{3,})[ \.]*(\S+)? *\n([\s\S]*?)\n? *\1 *(?:\n|$)/
   paragraph: /^/
   heading: /^ *(#{1,6}) +([^\n]+?) *#* *(?:\n|$)/
-  checkbox: /^\[([ x])\] +/
 
-block.gfm.paragraph = replace(base_paragraph
-)( 'fences', block.gfm.fences.source.replace('\\1', '\\2')
-)( 'list', block.list.source.replace('\\1', '\\3')
-)( 'hr', block.hr
-)( 'heading', block.heading
-)( 'lheading', block.lheading
-)( 'blockquote', block.blockquote
-)( 'tag', '<' + block._tag
-)( 'def', block.def
+block.gfm.paragraph = replace(block.paragraph
+)( '(?!', "(?!#{
+  block.gfm.fences.source.replace('\\1', '\\2')
+}|#{
+  block.list.source.replace('\\1', '\\3')
+}|"
 )()
 
+###
 # GFM + Tables Block Grammar
-
+###
 block.tables = Object.assign {}, block.gfm,
-  nptable: /^ *(\S.*\|.*)\n *([-:]+ *\|[-| :]*)\n((?:.*\|.*(?:\n|$))*)\n*/
-  table: /^ *\|(.+)\n *\|( *[-:]+[-| :]*)\n((?: *\|.*(?:\n|$))*)\n*/
+  nptable: /^ *([^|\n ].*\|.*)\n *([-:]+ *\|[-| :]*)(?:\n((?:.*[^>\n ].*(?:\n|$))*)\n*|$)/
+  table: /^ *\|(.+)\n *\|?( *[-:]+[-| :]*)(?:\n((?: *[^>\n ].*(?:\n|$))*)\n*|$)/
 
 
 class Lexer
@@ -163,11 +192,10 @@ class Lexer
   @lex: (src, options) ->
     new Lexer(options).lex(src)
 
-  constructor: (options, links = {})->
+  constructor: (@options)->
     @tokens = []
     @tokens.notes = []
     @tokens.links = {}
-    @options = options or marked.defaults
     @rules = block.normal
     if @options.gfm
       @rules =
@@ -188,9 +216,10 @@ class Lexer
       # newline
       if cap = @rules.newline.exec src
         src = src[cap[0].length ..]
-        @tokens.push
-          type: 'space'
-          text: cap[0]
+        if cap[0].length
+          @tokens.push
+            type: 'space'
+            text: cap[0]
 
       # code
       if @options.indentCode && cap = @rules.code.exec src
@@ -227,9 +256,9 @@ class Lexer
         src = src[cap[0].length ..]
         item =
           type: 'table'
-          header: cap[1].replace(/^ *| *\| *$/g, '').split(/ *\| */)
+          header: splitCells cap[1].replace(/^ *| *\| *$/g, '')
           align: cap[2].replace(/^ *|\| *$/g, '').split(/ *\| */)
-          cells: cap[3].replace(/\n$/, '').split('\n')
+          cells: cap[3]?.replace(/\n$/, '').split('\n') || []
         for o, i in item.align
           item.align[i] =
             if      /^ *-+: *$/.test o  then 'right'
@@ -237,7 +266,7 @@ class Lexer
             else if /^ *:-+ *$/.test o  then 'left'
             else                              null
         for o, i in item.cells
-          item.cells[i] = o.split(/ *\| */)
+          item.cells[i] = splitCells o, item.header.length
         @tokens.push item
         continue
 
@@ -267,9 +296,14 @@ class Lexer
         # console.log 'block list', cap
         src = src[cap[0].length ..]
         bull = cap[2]
+        is_ordered = "." == bull.slice(-1)
         @tokens.push
           type: 'list_start'
-          ordered: "." == bull.slice(-1)
+          ordered: is_ordered
+          start:
+            if is_ordered
+            then  +bull
+            else  ''
         # Get each top-level item.
         cap = cap[0].match(@rules.item)
         next = false
@@ -282,15 +316,6 @@ class Lexer
           # so it is seen as the next token.
           space = item.length
           item = item.replace @rules.with_bullet, ''
-
-          # taskLists
-          if @options.gfm && @options.taskLists
-            checkbox = @rules.checkbox.exec item
-            if checkbox
-              checked = checkbox[1] == 'x'
-              item = item.replace @rules.checkbox, ''
-            else
-              checked = undefined
 
           # Outdent whatever the
           # list item contains. Hacky.
@@ -314,8 +339,16 @@ class Lexer
             next = item.charAt(item.length - 1) == '\n'
             if !loose
               loose = next
+
+          # Check for task list items
+          checkbox = @rules.checkbox.exec item
+          checked =
+            if checkbox
+              item = item.replace @rules.checkbox, ''
+              checkbox[1] != ' '
+
           type = if loose then 'loose_item_start' else 'list_item_start'
-          @tokens.push { checked, type }
+          @tokens.push { checked, type, task: checked? }
 
           # Recurse.
           @token item, false
@@ -350,25 +383,26 @@ class Lexer
 
       # table (gfm)
       if top and cap = @rules.table.exec src
-        src = src[cap[0].length ..]
         item =
           type: 'table'
-          header: cap[1].replace(/^ *| *\| *$/g, '').split(/ *\| */)
+          header: splitCells cap[1].replace(/^ *| *\| *$/g, '')
           align: cap[2].replace(/^ *|\| *$/g, '').split(/ *\| */)
-          cells: cap[3].replace(/(?: *\| *)?\n$/, '').split('\n')
-        for o, i in item.align
-          item.align[i] =
-            if      /^ *-+: *$/.test(o)  then 'right'
-            else if /^ *:-+: *$/.test(o) then 'center'
-            else if /^ *:-+ *$/.test(o)  then 'left'
-            else                               null
-        for o, i in item.cells
-          item.cells[i] = o
-          .replace(/^ *\| *| *\| *$/g, '')
-          .split(/ *\| */)
-
-        @tokens.push item
-        continue
+          cells:
+            if cap[3]
+            then  cap[3].replace(/(?: *\| *)?\n$/, '').split('\n')
+            else  []
+        if item.header.length == item.align.length
+          src = src[cap[0].length ..]
+          for o, i in item.align
+            item.align[i] =
+              if      /^ *-+: *$/.test(o)  then 'right'
+              else if /^ *:-+: *$/.test(o) then 'center'
+              else if /^ *:-+ *$/.test(o)  then 'left'
+              else                               null
+          for o, i in item.cells
+            item.cells[i] = splitCells o.replace(/^ *\| *| *\| *$/g, ''), item.header.length
+          @tokens.push item
+          continue
 
       # lheading
       if cap = @rules.lheading.exec src
@@ -405,24 +439,62 @@ class Lexer
     @tokens
 
 
-# Inline Lexer & Compiler
+###
+# Inline-Level Grammar
+###
 inline =
-  escape: /^\\([\\`*{}\[\]()#+\-.!_>])/
+  escape: /^\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/
   autolink: /^<(scheme:[^\s\x00-\x1f<>]*|email)>/
-  anker: /^-(-\w+){1,5}/
   url: noop
-  tag: /^<!--[\s\S]*?-->|^<\/?[a-zA-Z0-9\-]+(?:"[^"]*"|'[^']*'|\s[^<'">\/\s]*)*?\/?>/
-  note: /^\^\[((?:\[[^\[\]]*\]|\\[\[\]]|[^\[\]])*)\]/
-  link: /^!?\[(inside)\]\(href\)/
-  reflink: /^!?\[(inside)\]\s*\[([^\]]*)\]/
-  nolink: /^!?\[((?:\[[^\[\]]*\]|\\[\[\]]|[^\[\]])*)\]/
-  strong: /^__([\s\S]+?)__(?!_)|^\*\*([\s\S]+?)\*\*(?!\*)/
-  em: /^_([^\s_](?:[^_]|__)+?[^\s_])_\b|^\*((?:\*\*|[^*])+?)\*(?!\*)/
+  tag: ///
+     ^comment
+    |^</[a-zA-Z][\w:-]*\s*>                # self-closing tag
+    |^<[a-zA-Z][\w-]*(?:attribute)*?\s*/?> # open tag
+    |^<\?[\s\S]*?\?>                       # processing instruction, e.g. <?php ?>
+    |^<![a-zA-Z]+\s[\s\S]*?>               # declaration, e.g. <!DOCTYPE html>
+    |^<!\[CDATA\[[\s\S]*?\]\]>             # CDATA section
+  ///
+
+  link: /^!?\[(label)\]\(href(?:\s+(title))?\s*\)/
+  reflink: ///
+    ^!?\[(label)\]\[(?!\s*\])((?:
+       \\[\[\]]?
+      |[^\[\]\\]
+    )+)\]
+  ///
+  nolink: ///
+    ^!?\[(?!\s*\])((?:
+       \[[^\[\]]*\]
+      |\\[\[\]]
+      |[^\[\]]
+    )*)\](?:\[\])?
+  ///
+  strong: ///
+    ^([_~*=])\1(
+       [^\s][\s\S]*?[^\s]
+      |[^\s]
+    )\1\1(?!\1)
+  ///
+  em: ///
+     ^_([^\s][\s\S]*?[^\s_])_(?!_)
+    |^_([^\s_][\s\S]*?[^\s])_(?!_)
+    |^\*([^\s][\s\S]*?[^\s*])\*(?!\*)
+    |^\*([^\s*][\s\S]*?[^\s])\*(?!\*)
+    |^_([^\s_])_(?!_)
+    |^\*([^\s*])\*(?!\*)
+  ///
   code: /^(`+)\s*([\s\S]*?[^`]?)\s*\1(?!`)/
   br: /^ {2,}\n(?!\s*$)/
-  del: noop
-  text: /^[\s\S]+?(?=[\\<!\[`*-]|\b_| {2,}\n|$)/
+  text: /^[\s\S]+?(?=[\\<!\[`*-=]|\b_| {2,}\n|$)/
 
+  # extended
+  anker: /^\w+-\w+-\w+-\w+-\w+|-\w+-\w+-\w+-\w+|-\w+-\w+-\w+|-\w+-\w+/
+  note: /^\^\[(label)\]/
+  sup: /^\^((?:[^\s^]|\^\^)+?)\^(?!\^)/
+  sub: /^~((?:[^\s~]|~~)+?)~(?!~)/
+
+
+  _escapes: /\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/g
   _scheme: /[a-zA-Z][a-zA-Z0-9+.-]{1,31}/
   _email: ///
     [a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+
@@ -431,11 +503,20 @@ inline =
     (?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+
     (?![-_])
   ///
-  _inside: /(?:\[[^\[\]]*\]|\\[\[\]]|[^\[\]]|\](?=[^\[]*\]))*/
-  _href: /\s*<?([\s\S]*?)>?(?:\s+['"]([\s\S]*?)['"])?\s*/
 
-  sup: noop
-  sub: noop
+  _attribute: /\s+[a-zA-Z:_][\w.:-]*(?:\s*=\s*"[^"]*"|\s*=\s*'[^']*'|\s*=\s*[^\s"'=<>`]+)?/
+  _label: /(?:\[[^\[\]]*\]|\\[\[\]]?|`[^`]*`|[^\[\]\\])*?/
+  _href: ///
+    \s*(
+      <(?:\\[<>]?
+      |[^\s<>\\])*>
+      |(?:\\[()]?
+      |\([^\s\x00-\x1f()\\]*\)
+      |[^\s\x00-\x1f()\\]
+    )*?)
+  ///
+  _title: /"(?:\\"?|[^"\\])*"|'(?:\\'?|[^'\\])*'|\((?:\\\)?|[^)\\])*\)/
+
 
 
 inline.autolink = replace(inline.autolink
@@ -443,51 +524,66 @@ inline.autolink = replace(inline.autolink
 )('email', inline._email
 )()
 
-inline.link = replace(inline.link
-)('inside', inline._inside
-)('href', inline._href
-)()
-inline.reflink = replace(inline.reflink
-)('inside', inline._inside
+inline.tag = replace(inline.tag
+)('comment', block._comment
+)('attribute', inline._attribute
 )()
 
+inline.link = replace(inline.link
+)('label', inline._label
+)('href', inline._href
+)('title', inline._title
+)()
+
+inline.reflink = replace(inline.reflink
+)('label', inline._label
+)()
+
+inline.note = replace(inline.note
+)('label', inline._label
+)()
+
+###
 # Normal Inline Grammar
+###
 inline.normal = Object.assign({}, inline)
 
-# GFM Inline Grammar
-inline.gfm = Object.assign({}, inline.normal,
-  escape: /^\\([\\`*{}\[\]()#+^~\-.!_>|])/
-  text: /^[\s\S]+?(?=[\\^~<!\[`*-]|\b_| {2,}\n|https?:\/\/|ftp:\/\/|www\.|[a-zA-Z0-9.!#$%&\'*+\/=?^_`{|}~-]+@|$)/
+###
+# Pedantic Inline Grammar
+# -- bye --
+###
 
-  url: /^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/
+###
+# GFM Inline Grammar
+###
+inline.gfm = Object.assign({}, inline.normal,
+  escape: replace(inline.escape)('])', '~|])')()
+  text: replace(inline.text)(']|', '~]|')('|', '|https?://|ftp://|www\\.|[a-zA-Z0-9.!#$%&\'*+/=?^_`{\\|}~-]+@|')()
+  url: replace(/^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/)('email', inline._email)()
+
   _backpedal: /(?:[^?!.,:;*_~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_~)]+(?!$))+/
-  strong: ///
-      ^\*\*([\s\S]+?)\*\*(?!\*)
-    | ^__([\s\S]+?)__(?!_)
-  ///
-  del: /^~~(?=\S)([\s\S]*?\S)~~/
-  em: ///
-      ^\*((?:[^*]|\*\*)+?)\*(?!\*)
-    | ^_([^\s_](?:[^_]|__)+?[^\s_])_\b
-  ///
-  sup: /^\^((?:[^\s^]|\^\^)+?)\^(?!\^)/
-  sub: /^~((?:[^\s~]|~~)+?)~(?!~)/
 )
 
-inline.gfm.url = replace(inline.gfm.url
-)('email', inline._email
-)()
-
+###
 # GFM + Line Breaks Inline Grammar
+###
 inline.breaks = Object.assign({}, inline.gfm,
   br: replace(inline.br)('{2,}', '*')()
   text: replace(inline.gfm.text)('{2,}', '*')())
 
-# Expose Inline Rules
+###
+# Inline Lexer & Compiler
+###
 class InlineLexer
+  ###
+  # Expose Inline Rules
+  ###
   @rules: inline
   @output: (src, options) ->
     new InlineLexer(options, options).output src
+
+  @escapes: (text)->
+    text?.replace(InlineLexer.rules._escapes, '$1') or text
 
   constructor: ({ @notes, @links }, options) ->
     @options = options or marked.defaults
@@ -580,9 +676,11 @@ class InlineLexer
           @inLink = true
           text = @output cap[1]
           @inLink = false
-        out += @outputLargeBrackets { mark, text },
-          href:  cap[2]
-          title: cap[3]
+
+        href = InlineLexer.escapes cap[2]
+        title = InlineLexer.escapes cap[3]?.slice(1, -1) or ''
+
+        out += @outputLargeBrackets { mark, text }, { href, title }
         continue
 
       # reflink, nolink
@@ -630,21 +728,24 @@ class InlineLexer
       if cap = @rules.strong.exec src
         # console.log 'strong', cap
         src = src[cap[0].length ..]
-        out += @renderer.strong @output cap[2] or cap[1]
-        continue
-
-      # del (gfm)
-      if cap = @rules.del.exec src
-        # console.log 'del (gfm)', cap
-        src = src[cap[0].length ..]
-        out += @renderer.del @output cap[1]
+        method = 
+          switch cap[1]
+            when '_', '*'
+              'strong'
+            when '~'
+              # del (gfm)
+              'del'
+            when '='
+              # Mark (markdown preview enhanced extended syntax)
+              'mark'
+        out += @renderer[method] @output cap[2]
         continue
 
       # em
       if cap = @rules.em.exec src
         # console.log 'em', cap
         src = src[cap[0].length ..]
-        out += @renderer.em @output cap[2] or cap[1]
+        out += @renderer.em @output cap[6] or cap[5] or cap[4] or cap[3] or cap[2] or cap[1]
         continue
 
       # sup
@@ -703,10 +804,11 @@ class InlineLexer
         @renderer.image href, title, text
 
       when /// ^$ | ^mailto: | :\/\/ | ^(\.{0,2})[\?\#\/] | ^[\w()%+:/]+$ ///ig.exec href
+        href = encodeURI(href).replace /%25/g, '%'
         @renderer.link href, title, text
 
       else
-        @renderer.ruby link.href, link.title, text
+        @renderer.ruby href, title, text
 
   smartypants: (text) ->
     if !@options.smartypants
@@ -734,10 +836,9 @@ class InlineLexer
 
 # Renderer
 class Renderer
-  constructor: (options) ->
-    @options = options or {}
+  constructor: (@options)->
 
-  code: (code, lang, escaped) ->
+  code: (code, lang, escaped)->
     if @options.highlight
       out = @options.highlight(code, lang)
       if out? and out != code
@@ -760,13 +861,16 @@ class Renderer
     html
 
   heading: (text, level, raw) ->
-    id = @options.headerPrefix + raw.toLowerCase().replace(/[^\w]+/g, '-')
-    """<h#{level} id="#{ id }">#{ text }</h#{level}>"""
+    if @options.headerIds
+      id = @options.headerPrefix + raw.toLowerCase().replace(/[^\w]+/g, '-')
+      """<h#{level} id="#{ id }">#{ text }</h#{level}>"""
+    else
+      """<h#{level}>#{ text }</h#{level}>"""
 
   hr: ->
     '<hr>'
 
-  list: (body, ordered, taskList) ->
+  list: (body, ordered, start, taskList) ->
     type =
       if ordered
       then "ol"
@@ -775,7 +879,11 @@ class Renderer
       if taskList
       then ''' class="task-list"'''
       else ''
-    """<#{type}#{classNames}>#{ body }</#{type}>"""
+    start_at =
+      if ordered && start != 1
+      then """ start="#{start}" """
+      else ''
+    """<#{type}#{start_at}#{classNames}>#{ body }</#{type}>"""
 
   listitem: (text, checked) ->
     if checked?
@@ -811,6 +919,9 @@ class Renderer
   # span level renderer
   strong: (text) ->
     """<strong>#{ text }</strong>"""
+
+  mark: (text) ->
+    """<abbr>#{ text }</abbr>"""
 
   em: (text) ->
     """<em>#{ text }</em>"""
@@ -877,13 +988,10 @@ class Parser
   @parse = (src, options, renderer) ->
     new Parser(options, renderer).parse src
 
-  constructor: (options) ->
+  constructor: (@options) ->
     @tokens = []
     @token = null
-    @options = options or marked.defaults
-    @options.renderer = @options.renderer or new Renderer
-    @renderer = @options.renderer
-    @renderer.options = @options
+    { @renderer } = @options
 
   parse: (src) ->
     @inline = new InlineLexer src, @options
@@ -899,7 +1007,7 @@ class Parser
       notes = ""
       for { text } in src.notes
         notes += @renderer.listitem text 
-      out += @renderer.list notes, true
+      out += @renderer.list notes, true, 1
 
     tag = @options.tag
     if tag
@@ -968,14 +1076,14 @@ class Parser
         @renderer.blockquote(body)
 
       when 'list_start'
+        { ordered, start } = @token
         body = ''
         tasklist = false
-        ordered = @token.ordered
         while @next().type != 'list_end'
           if @token.checked?
             taskList = true
           body += @tok()
-        @renderer.list(body, ordered, taskList)
+        @renderer.list(body, ordered, start, taskList)
 
       when 'list_item_start'
         body = ''
@@ -1009,7 +1117,7 @@ class Parser
         @renderer.paragraph @parseText(), @token.top
 
 # Marked
-marked = (src, opt, callback) ->
+marked = (src, opt) ->
   # throw error in case of non string input
   unless src
     throw new Error('marked(): input parameter is undefined or null')
@@ -1017,15 +1125,27 @@ marked = (src, opt, callback) ->
     txt = Object.prototype.toString.call(src)
     throw new Error("marked(): input parameter is of type #{txt}, string expected")
 
-  if callback || typeof opt == 'function'
-    if !callback
-      callback = opt
-      opt = null
-    opt = Object.assign({}, marked.defaults, opt or {})
-    highlight = opt.highlight
+  try
+    opt = Object.assign({}, marked.defaults, opt)
+    opt.renderer.options = opt
+
+    tokens = Lexer.lex(src, opt)
+    return Parser.parse tokens, opt
+  catch e
+    e.message += '\nPlease report this to https://github.com/7korobi/marked.'
+    if (opt or marked.defaults).silent
+      message = escape(e.message + '', true)
+      return "<p>An error occured:</p><pre>#{message}</pre>"
+    throw e
+
+
+###
+  if callback
+    opt = Object.assign({}, marked.defaults, opt)
+    { highlight } = opt
 
     try
-      tokens = Lexer.lex(src, opt)
+      tokens = Lexer.lex(src, opt, links)
     catch e
       return callback(e)
     pending = tokens.length
@@ -1066,19 +1186,7 @@ marked = (src, opt, callback) ->
         return
       return
     return
-
-  try
-    if opt
-      opt = Object.assign({}, marked.defaults, opt)
-    return Parser.parse Lexer.lex(src, opt), opt
-  catch e
-    e.message += '\nPlease report this to https://github.com/markedjs/marked.'
-    if (opt or marked.defaults).silent
-      message = escape(e.message + '', true)
-      return "<p>An error occured:</p><pre>#{message}</pre>"
-    throw e
-  return
-
+###
 
 # Options
 marked.options =
@@ -1086,7 +1194,7 @@ marked.setOptions = (opt) ->
   Object.assign marked.defaults, opt
   marked
 
-marked.defaults =
+marked.getDefaults = ->
   tag: null
   gfm: true
   tables: true
@@ -1099,12 +1207,15 @@ marked.defaults =
   smartLists: false
   silent: false
   highlight: null
-  langPrefix: 'lang-'
+  langPrefix: 'language-'
   smartypants: false
+  headerIds: true
   headerPrefix: ''
   renderer: new Renderer
   xhtml: false
   baseUrl: null
+marked.defaults = marked.getDefaults()
+
 
 # Expose
 
