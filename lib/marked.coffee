@@ -1,6 +1,6 @@
 # Helpers
 
-escape = (html, encode) ->
+escape = (html, encode)->
   amp =
     if encode
     then /&/g
@@ -12,9 +12,9 @@ escape = (html, encode) ->
   .replace /"/g, '&quot;'
   .replace /'/g, '&#39;'
 
-unescape = (html) ->
+unescape = (html)->
   # explicitly match decimal, hex, and named HTML entities
-  html.replace /&(#(?:\d+)|(?:#x[0-9A-Fa-f]+)|(?:\w+));?/ig, (_, n) ->
+  html.replace /&(#(?:\d+)|(?:#x[0-9A-Fa-f]+)|(?:\w+));?/ig, (_, n)->
     n = n.toLowerCase()
     if n == 'colon'
       return ':'
@@ -68,10 +68,10 @@ originIndependentUrl = /^$|^[a-z][a-z0-9+.-]*:|^[?#]/i
 noop = ->
 noop.exec = noop
 
-replace = (regex, opt) ->
+replace = (regex, opt)->
   regex = regex.source or regex
   opt = opt or ''
-  self = (name, val) ->
+  self = (name, val)->
     if !name
       return new RegExp(regex, opt)
     val = val.source or val
@@ -84,12 +84,12 @@ replace = (regex, opt) ->
 # Block Lexer
 ###
 block =
+  fences: noop
+  table: noop
   newline: /^ *\n+/
   code: /^( {4}[^\n]+\n*)+/
-  fences: noop
   hr: /^ {0,3}((?:- *){3,}|(?:_ *){3,}|(?:\* *){3,})(?:\n|$)/
   heading: /^ *(#{1,6}) *([^\n]+?) *(?:#+ *)?(?:\n|$)/
-  nptable: noop
   blockquote: /^( {0,3}> ?(paragraph|[^\n]*)(?:\n|$))+/
   list: /^( *)(bull) [\s\S]+?(?:hr|def|\n{2,}(?! )(?!\1bull )\n*|\s*$)/
   checkbox: /^\[([ xX])\] +/
@@ -106,7 +106,6 @@ block =
     )
   ///
   def: /^ {0,3}\[(label)\]: *\n? *<?([^\s>]+)>?(?:(?: +\n? *| *\n *)(title))? *(?:\n|$)/
-  table: noop
   lheading: /^([^\n]+)\n *(=|-){2,} *(?:\n|$)/
   paragraph: /^([^\n]+(?:\n(?!hr|heading|lheading| {0,3}>|<\/?(?:tag)(?: +|\n|\/?>)|<(?:script|pre|style|!--))[^\n]+)*)/
   text: /^[^\n]+/
@@ -183,13 +182,11 @@ block.gfm.paragraph = replace(block.paragraph
 # GFM + Tables Block Grammar
 ###
 block.tables = Object.assign {}, block.gfm,
-  nptable: /^ *([^|\n ].*\|.*)\n *([-:]+ *\|[-| :]*)(?:\n((?:.*[^>\n ].*(?:\n|$))*)\n*|$)/
-  table: /^ *\|(.+)\n *\|?( *[-:]+[-| :]*)(?:\n((?: *[^>\n ].*(?:\n|$))*)\n*|$)/
-
+  table: /^ *(.*\|.*) *\n *((\|?) *:?-+:? *(?:\| *:?-+:? *)*(\|?))(?:\n *((?:\3.*[^>\n ].*\4(?:\n|$))*)|$)/
 
 class Lexer
   @rules: block
-  @lex: (src, options) ->
+  @lex: (src, options)->
     new Lexer(options).lex(src)
 
   constructor: (@options)->
@@ -203,7 +200,7 @@ class Lexer
         then block.tables
         else block.gfm
 
-  lex: (src) ->
+  lex: (src)->
     src = src
     .replace /\r\n|\r/g, '\n'
     .replace /\t/g, '    '
@@ -211,7 +208,7 @@ class Lexer
     .replace /\u2424/g, '\n'
     @token src, true
 
-  token: (src, top) ->
+  token: (src, top)->
     while src
       # newline
       if cap = @rules.newline.exec src
@@ -252,21 +249,23 @@ class Lexer
         continue
 
       # table no leading pipe (gfm)
-      if top and cap = @rules.nptable.exec src
+      if top and cap = @rules.table.exec src
         src = src[cap[0].length ..]
-        item =
-          type: 'table'
-          header: splitCells cap[1].replace(/^ *| *\| *$/g, '')
-          align: cap[2].replace(/^ *|\| *$/g, '').split(/ *\| */)
-          cells: cap[3]?.replace(/\n$/, '').split('\n') || []
-        for o, i in item.align
-          item.align[i] =
+        trim = /^\|? *|\ *\|? *$/g
+
+        header = splitCells cap[1].replace(trim, '')
+        align = cap[2].replace(trim, '').split(/ *\| */)
+        cells = cap[5]?.replace(/\n$/, '').split('\n').map((o)=> o.replace(trim, '') ) ? []
+
+        item = { type: 'table', header, align, cells }
+        for o, i in align
+          align[i] =
             if      /^ *-+: *$/.test o  then 'right'
             else if /^ *:-+: *$/.test o then 'center'
             else if /^ *:-+ *$/.test o  then 'left'
             else                              null
         for o, i in item.cells
-          item.cells[i] = splitCells o, item.header.length
+          cells[i] = splitCells o, item.align.length
         @tokens.push item
         continue
 
@@ -381,29 +380,6 @@ class Lexer
           title: cap[3]
         continue
 
-      # table (gfm)
-      if top and cap = @rules.table.exec src
-        item =
-          type: 'table'
-          header: splitCells cap[1].replace(/^ *| *\| *$/g, '')
-          align: cap[2].replace(/^ *|\| *$/g, '').split(/ *\| */)
-          cells:
-            if cap[3]
-            then  cap[3].replace(/(?: *\| *)?\n$/, '').split('\n')
-            else  []
-        if item.header.length == item.align.length
-          src = src[cap[0].length ..]
-          for o, i in item.align
-            item.align[i] =
-              if      /^ *-+: *$/.test(o)  then 'right'
-              else if /^ *:-+: *$/.test(o) then 'center'
-              else if /^ *:-+ *$/.test(o)  then 'left'
-              else                               null
-          for o, i in item.cells
-            item.cells[i] = splitCells o.replace(/^ *\| *| *\| *$/g, ''), item.header.length
-          @tokens.push item
-          continue
-
       # lheading
       if cap = @rules.lheading.exec src
         src = src[cap[0].length ..]
@@ -488,7 +464,7 @@ inline =
   text: /^[\s\S]+?(?=[\\<!\[`*-=]|\b_| {2,}\n|$)/
 
   # extended
-  anker: /^\w+-\w+-\w+-\w+-\w+|-\w+-\w+-\w+-\w+|-\w+-\w+-\w+|-\w+-\w+/
+  anker: /^\w+-\w+-\w+-\w+-\w+|-\w+-\w+-\w+|-\w+-\w+|-\w+/
   note: /^\^\[(label)\]/
   sup: /^\^((?:[^\s^]|\^\^)+?)\^(?!\^)/
   sub: /^~((?:[^\s~]|~~)+?)~(?!~)/
@@ -508,15 +484,25 @@ inline =
   _label: /(?:\[[^\[\]]*\]|\\[\[\]]?|`[^`]*`|[^\[\]\\])*?/
   _href: ///
     \s*(
-      <(?:\\[<>]?
-      |[^\s<>\\])*>
-      |(?:\\[()]?
-      |\([^\s\x00-\x1f()\\]*\)
-      |[^\s\x00-\x1f()\\]
-    )*?)
+       <(?:
+         \\[<>]?
+        |[^\s<>\\]
+      )*>
+      |(?:
+         \\[()]?
+        |\([^\s\x00-\x1f()\\]*\)
+        |[^\s\x00-\x1f()\\]
+      )*?
+    )
   ///
   _title: /"(?:\\"?|[^"\\])*"|'(?:\\'?|[^'\\])*'|\((?:\\\)?|[^)\\])*\)/
-
+  _url_peice: ///
+      ^$
+    | ^mailto:
+    | :\/\/
+    | ^(\.{0,2})[\?\#\/]
+    | ^[\w()%+:/]+$
+  ///ig
 
 
 inline.autolink = replace(inline.autolink
@@ -579,13 +565,13 @@ class InlineLexer
   # Expose Inline Rules
   ###
   @rules: inline
-  @output: (src, options) ->
+  @output: (src, options)->
     new InlineLexer(options, options).output src
 
   @escapes: (text)->
     text?.replace(InlineLexer.rules._escapes, '$1') or text
 
-  constructor: ({ @notes, @links }, options) ->
+  constructor: ({ @notes, @links }, options)->
     @options = options or marked.defaults
     @rules = inline.normal
     @renderer = @options.renderer or new Renderer
@@ -600,7 +586,7 @@ class InlineLexer
       else
         @rules = inline.gfm
 
-  output: (src) ->
+  output: (src)->
     out = ''
     while src
       # escape
@@ -623,12 +609,14 @@ class InlineLexer
         out += @outputLargeBrackets { text }, { href }
         continue
 
+      ###
       # anker
       if cap = @rules.anker.exec src
         # console.log 'anker', cap
         src = src[cap[0].length ..]
-        out += @renderer.anker(cap[0][2..])
+        out += @renderer.anker(cap[0])
         continue
+      ###
 
       # url (gfm)
       if !@inLink and (cap = @rules.url.exec src)
@@ -780,7 +768,7 @@ class InlineLexer
         throw new Error 'Infinite loop on byte: ' + src.charCodeAt(0)
     out
 
-  outputLargeBrackets: ({ mark, text }, link) ->
+  outputLargeBrackets: ({ mark, text }, link)->
     { href = '', title = '' } = link
     href &&= escape href
     title &&= escape title
@@ -799,18 +787,17 @@ class InlineLexer
     if @options.baseUrl && ! originIndependentUrl.test(href)
       href = resolveUrl @options.baseUrl, href
 
-    switch
-      when mark == '!'
+    switch mark
+      when '!'
         @renderer.image href, title, text
-
-      when /// ^$ | ^mailto: | :\/\/ | ^(\.{0,2})[\?\#\/] | ^[\w()%+:/]+$ ///ig.exec href
-        href = encodeURI(href).replace /%25/g, '%'
-        @renderer.link href, title, text
-
       else
-        @renderer.ruby href, title, text
+        if @options.ruby && ! @rules._url_peice.exec href
+          @renderer.ruby href, title, text
+        else
+          href = encodeURI(href).replace /%25/g, '%'
+          @renderer.link href, title, text
 
-  smartypants: (text) ->
+  smartypants: (text)->
     if !@options.smartypants
       return text
     text
@@ -822,7 +809,7 @@ class InlineLexer
     .replace /"/g, '”'
     .replace /\.{3}/g, '…'
 
-  mangle: (text) ->
+  mangle: (text)->
     if !@options.mangle
       return text
     out = ''
@@ -854,13 +841,13 @@ class Renderer
     else
       """<pre><code>#{ code }</code></pre>"""
 
-  blockquote: (quote) ->
+  blockquote: (quote)->
     """<blockquote>#{ quote }</blockquote>"""
 
-  html: (html) ->
+  html: (html)->
     html
 
-  heading: (text, level, raw) ->
+  heading: (text, level, raw)->
     if @options.headerIds
       id = @options.headerPrefix + raw.toLowerCase().replace(/[^\w]+/g, '-')
       """<h#{level} id="#{ id }">#{ text }</h#{level}>"""
@@ -870,7 +857,7 @@ class Renderer
   hr: ->
     '<hr>'
 
-  list: (body, ordered, start, taskList) ->
+  list: (body, ordered, start, taskList)->
     type =
       if ordered
       then "ol"
@@ -885,7 +872,7 @@ class Renderer
       else ''
     """<#{type}#{start_at}#{classNames}>#{ body }</#{type}>"""
 
-  listitem: (text, checked) ->
+  listitem: (text, checked)->
     if checked?
       attr =
         if checked
@@ -895,19 +882,19 @@ class Renderer
     else
       """<li>#{ text }</li>"""
 
-  paragraph: (text, is_top) ->
+  paragraph: (text, is_top)->
     if is_top
       """<p>#{ text }</p>"""
     else
       "#{ text }"
 
-  table: (header, body) ->
+  table: (header, body)->
     """<table><thead>#{ header }</thead><tbody>#{ body }</tbody></table>"""
 
-  tablerow: (content) ->
+  tablerow: (content)->
     """<tr>#{ content }</tr>"""
 
-  tablecell: (content, flags) ->
+  tablecell: (content, flags)->
     style =
       if flags.align
       then """style="text-align:#{ flags.align }" """
@@ -917,28 +904,28 @@ class Renderer
     else """<td #{ style }>#{ content }</td>"""
 
   # span level renderer
-  strong: (text) ->
+  strong: (text)->
     """<strong>#{ text }</strong>"""
 
-  mark: (text) ->
+  mark: (text)->
     """<abbr>#{ text }</abbr>"""
 
-  em: (text) ->
+  em: (text)->
     """<em>#{ text }</em>"""
 
-  sup: (text) ->
+  sup: (text)->
     """<sup>#{ text }</sup>"""
 
-  sub: (text) ->
+  sub: (text)->
     """<sub>#{ text }</sub>"""
 
-  codespan: (text) ->
+  codespan: (text)->
     """<code>#{ text }</code>"""
 
   br: ->
     '\n'
 
-  del: (text) ->
+  del: (text)->
     """<del>#{ text }</del>"""
 
   ruby: (ruby, title, text)->
@@ -950,12 +937,12 @@ class Renderer
   note: (num, title)->
     """<sup class="note" title="#{ title }">#{ num }</sup>"""
 
-  link: (href, title, text) ->
+  link: (href, title, text)->
     if title
     then """<a href="#{ href }" title="#{ title }">#{ text }</a>"""
     else """<a href="#{ href }">#{ text }</a>"""
 
-  image: (href, title, text) ->
+  image: (href, title, text)->
     if title
     then """<img src="#{ href }" alt="#{ text }" title="#{ title }">"""
     else """<img src="#{ href }" alt="#{ text }">"""
@@ -963,7 +950,7 @@ class Renderer
   anker: (code)->
     """<q cite="#{code}">--#{code}</q>"""
 
-  text: (text) ->
+  text: (text)->
     text
 
 # returns only the textual part of the token
@@ -985,15 +972,15 @@ class TextRenderer
 
 # Parsing & Compiling
 class Parser
-  @parse = (src, options, renderer) ->
+  @parse = (src, options, renderer)->
     new Parser(options, renderer).parse src
 
-  constructor: (@options) ->
+  constructor: (@options)->
     @tokens = []
     @token = null
     { @renderer } = @options
 
-  parse: (src) ->
+  parse: (src)->
     @inline = new InlineLexer src, @options
     # use an InlineLexer with a TextRenderer to extract pure text
     @inlineText = new InlineLexer src, Object.assign {}, @options,
@@ -1117,7 +1104,7 @@ class Parser
         @renderer.paragraph @parseText(), @token.top
 
 # Marked
-marked = (src, opt) ->
+marked = (src, opt)->
   # throw error in case of non string input
   unless src
     throw new Error('marked(): input parameter is undefined or null')
@@ -1150,7 +1137,7 @@ marked = (src, opt) ->
       return callback(e)
     pending = tokens.length
 
-    done = (err) ->
+    done = (err)->
       if err
         opt.highlight = highlight
         return callback(err)
@@ -1175,7 +1162,7 @@ marked = (src, opt) ->
     tokens.map (token)->
       if token.type != 'code'
         return --pending or done()
-      highlight token.text, token.lang, (err, code) ->
+      highlight token.text, token.lang, (err, code)->
         if err
           return done(err)
         if code in [null, token.text]
@@ -1190,13 +1177,14 @@ marked = (src, opt) ->
 
 # Options
 marked.options =
-marked.setOptions = (opt) ->
+marked.setOptions = (opt)->
   Object.assign marked.defaults, opt
   marked
 
 marked.getDefaults = ->
   tag: null
   gfm: true
+  ruby: false
   tables: true
   indentCode: true
   taskLists: true
