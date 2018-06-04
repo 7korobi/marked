@@ -1,15 +1,16 @@
 {
-  "name": "marked",
+  "name": "marked-pre",
   "description": "A markdown parser built for speed",
-  "author": "Christopher Jeffrey",
-  "version": "0.4.0",
+  "author": "7korobi",
+  "version": "0.0.26",
   "main": "./lib/marked.js",
   "bin": "./bin/marked",
   "man": "./man/marked.1",
-  "repository": "git://github.com/markedjs/marked.git",
-  "homepage": "https://marked.js.org",
+  "preferGlobal": true,
+  "repository": "git@github.com:7korobi/marked.git",
+  "homepage": "https://github.com/7korobi/marked",
   "bugs": {
-    "url": "http://github.com/markedjs/marked/issues"
+    "url": "https://github.com/7korobi/marked/issues"
   },
   "license": "MIT",
   "keywords": [
@@ -23,6 +24,9 @@
     "html"
   ],
   "devDependencies": {
+    "babel-core": "^6.26.0",
+    "coffeescript": "^2.2.2",
+    "npm-run-all": "^4.1.3",
     "eslint": "^4.15.0",
     "eslint-config-standard": "^11.0.0-beta.0",
     "eslint-plugin-import": "^2.8.0",
@@ -41,6 +45,8 @@
     "uglify-js": "^3.3.10"
   },
   "scripts": {
+    "make": "run-s make:make test:old",
+    "make:make": "coffee --map --transpile -o ./lib/marked.js ./lib/marked.coffee",
     "test": "jasmine --config=jasmine.json",
     "test:unit": "npm test -- test/unit/**/*-spec.js",
     "test:specs": "npm test -- test/specs/**/*-spec.js",
