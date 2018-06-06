@@ -614,13 +614,13 @@ class InlineLexer
         @rules = inline.gfm
 
   output: (src)->
-    out = ''
+    out = []
     while src
       # escape
       if cap = @rules.escape.exec src
         # console.log 'escape', cap
         src = src[cap[0].length ..]
-        out += cap[1]
+        out.push cap[1]
         continue
 
       # autolink
@@ -633,7 +633,7 @@ class InlineLexer
         else
           text = escape cap[1]
           href = text
-        out += @outputLargeBrackets { text }, { href }
+        out.push @outputLargeBrackets { text }, { href }
         continue
 
       ###
@@ -641,7 +641,7 @@ class InlineLexer
       if cap = @rules.anker.exec src
         # console.log 'anker', cap
         src = src[cap[0].length ..]
-        out += @renderer.anker(cap[0])
+        out.push @renderer.anker(cap[0])
         continue
       ###
 
@@ -659,7 +659,7 @@ class InlineLexer
             href = 'http://' + text
           else
             href = text
-        out += @outputLargeBrackets { text }, { href }
+        out.push @outputLargeBrackets { text }, { href }
         continue
 
       # tag
@@ -670,7 +670,7 @@ class InlineLexer
         else if @inLink and /^<\/a>/i.test(cap[0])
           @inLink = false
         src = src[cap[0].length ..]
-        out += (
+        out.push (
           if @options.sanitize
             if @options.sanitizer
             then @options.sanitizer cap[0]
@@ -695,7 +695,7 @@ class InlineLexer
         href = InlineLexer.escapes cap[2].trim().replace /^<([\s\S]*)>$/, '$1'
         title = InlineLexer.escapes cap[3]?.slice(1, -1) or ''
 
-        out += @outputLargeBrackets { mark, text }, { href, title }
+        out.push @outputLargeBrackets { mark, text }, { href, title }
         continue
 
       # reflink, nolink
@@ -706,7 +706,7 @@ class InlineLexer
         link = (cap[2] or cap[1]).replace(/\s+/g, ' ')
         link = @links[link.toLowerCase()]
         unless link?.href
-          out += mark
+          out.push mark
           src = cap[0][1 .. ] + src
           continue
         if mark == '!'
@@ -715,7 +715,7 @@ class InlineLexer
           @inLink = true
           text = @output cap[1]
           @inLink = false
-        out += @outputLargeBrackets { mark, text }, link
+        out.push @outputLargeBrackets { mark, text }, link
         continue
 
       # note
@@ -729,14 +729,14 @@ class InlineLexer
 
         @notes.push o = { text } 
         o.href = '#' + num = @notes.length
-        out += @renderer.note num, text
+        out.push @renderer.note num, text
         continue
 
       # br
       if cap = @rules.br.exec src
         # console.log 'br', cap
         src = src[cap[0].length ..]
-        out += @renderer.br()
+        out.push @renderer.br()
         continue
 
       # strong
@@ -753,42 +753,42 @@ class InlineLexer
             when '='
               # Mark (markdown preview enhanced extended syntax)
               'mark'
-        out += @renderer[method] @output cap[2]
+        out.push @renderer[method] @output cap[2]
         continue
 
       # em
       if cap = @rules.em.exec src
         # console.log 'em', cap
         src = src[cap[0].length ..]
-        out += @renderer.em @output cap[6] or cap[5] or cap[4] or cap[3] or cap[2] or cap[1]
+        out.push @renderer.em @output cap[6] or cap[5] or cap[4] or cap[3] or cap[2] or cap[1]
         continue
 
       # sup
       if cap = @rules.sup.exec src
         # console.log 'sup', cap
         src = src[cap[0].length ..]
-        out += @renderer.sup @output cap[1]
+        out.push @renderer.sup @output cap[1]
         continue
 
       # sub
       if cap = @rules.sub.exec src
         # console.log 'sub', cap
         src = src[cap[0].length ..]
-        out += @renderer.sub @output cap[1]
+        out.push @renderer.sub @output cap[1]
         continue
 
       # code
       if cap = @rules.code.exec src
         # console.log 'code', cap
         src = src[cap[0].length ..]
-        out += @renderer.codespan escape cap[2], true
+        out.push @renderer.codespan escape cap[2], true
         continue
 
       # text
       if cap = @rules.text.exec src
         # console.log 'text', cap
         src = src[cap[0].length ..]
-        out += @renderer.text escape @smartypants cap[0]
+        out.push @renderer.text escape @smartypants cap[0]
         continue
 
       if src
@@ -869,12 +869,15 @@ class Renderer
       """<pre><code>#{ code }</code></pre>"""
 
   blockquote: (quote)->
+    quote = quote.join("")
     """<blockquote>#{ quote }</blockquote>"""
 
   html: (html)->
+    html = html.join("") if html?.join
     html
 
   heading: (text, level, raw)->
+    text = text.join("")
     if @options.headerIds
       id = @options.headerPrefix + raw.toLowerCase().replace(/[^\w]+/g, '-')
       """<h#{level} id="#{ id }">#{ text }</h#{level}>"""
@@ -885,6 +888,7 @@ class Renderer
     '<hr>'
 
   list: (body, ordered, start, taskList)->
+    body = body.join("")
     type =
       if ordered
       then "ol"
@@ -900,6 +904,7 @@ class Renderer
     """<#{type}#{start_at}#{classNames}>#{ body }</#{type}>"""
 
   listitem: (text, checked)->
+    text = text.join("")
     if checked?
       attr =
         if checked
@@ -910,18 +915,22 @@ class Renderer
       """<li>#{ text }</li>"""
 
   paragraph: (text, is_top)->
+    text = text.join("")
     if is_top
       """<p>#{ text }</p>"""
     else
       "#{ text }"
 
   table: (header, body)->
+    body = body.join("")
     """<table><thead>#{ header }</thead><tbody>#{ body }</tbody></table>"""
 
   tablerow: (content)->
+    content = content.join("")
     """<tr>#{ content }</tr>"""
 
   tablecell: (content, flags)->
+    content = content.join("")
     style =
       if flags.align
       then """style="text-align:#{ flags.align }" """
@@ -932,39 +941,42 @@ class Renderer
 
   # span level renderer
   strong: (text)->
+    text = text.join("") if text?.join
     """<strong>#{ text }</strong>"""
 
   mark: (text)->
+    text = text.join("") if text?.join
     """<abbr>#{ text }</abbr>"""
 
   em: (text)->
+    text = text.join("") if text?.join
     """<em>#{ text }</em>"""
 
   sup: (text)->
+    text = text.join("") if text?.join
     """<sup>#{ text }</sup>"""
 
   sub: (text)->
+    text = text.join("") if text?.join
     """<sub>#{ text }</sub>"""
 
   codespan: (text)->
+    text = text.join("") if text?.join
     """<code>#{ text }</code>"""
 
   br: ->
     '\n'
 
   del: (text)->
+    text = text.join("") if text?.join
     """<del>#{ text }</del>"""
 
-  ruby: (ruby, title, text)->
-    if title
-      """<span title="#{title}"><ruby>#{text}<rp>《</rp><rt>#{ruby}</rt><rp>》</rp></ruby></span>"""
-    else
-      """<ruby>#{text}<rp>《</rp><rt>#{ruby}</rt><rp>》</rp></ruby>"""
-
   note: (num, title)->
+    text = text.join("") if text?.join
     """<sup class="note" title="#{ title }">#{ num }</sup>"""
 
   link: (href, title, text)->
+    text = text.join("") if text?.join
     if title
     then """<a href="#{ href }" title="#{ title }">#{ text }</a>"""
     else """<a href="#{ href }">#{ text }</a>"""
@@ -974,10 +986,8 @@ class Renderer
     then """<img src="#{ href }" alt="#{ text }" title="#{ title }">"""
     else """<img src="#{ href }" alt="#{ text }">"""
 
-  anker: (code)->
-    """<q cite="#{code}">--#{code}</q>"""
-
   text: (text)->
+    text = text.join("") if text?.join
     text
 
 # returns only the textual part of the token
@@ -1008,25 +1018,27 @@ class Parser
     { @renderer } = @options
 
   parse: (src)->
+    { m } = @options
     @inline = new InlineLexer src, @options
     # use an InlineLexer with a TextRenderer to extract pure text
     @inlineText = new InlineLexer src, Object.assign {}, @options,
       renderer: new TextRenderer
     @tokens = src.reverse()
-    out = ''
+    out = []
     while @next()
-      out += @tok()
+      out.push @tok()
     if src.notes.length
-      out += @renderer.hr()
-      notes = ""
+      out.push @renderer.hr()
+      notes = []
       for { text } in src.notes
-        notes += @renderer.listitem text 
-      out += @renderer.list notes, true, 1
+        notes.push @renderer.listitem text 
+      out.push @renderer.list notes, true, 1
 
     tag = @options.tag
     if tag
-      out = """<#{tag}>#{out}</#{tag}>"""
-    out
+      m tag, {}, out
+    else
+      out.join("")
 
   next: ->
     @token = @tokens.pop()
@@ -1056,64 +1068,63 @@ class Parser
         @renderer.heading(
           @inline.output(@token.text),
           @token.depth,
-          unescape @inlineText.output @token.text
+          unescape @inlineText.output(@token.text).join("")
         )
 
       when 'code'
         @renderer.code(@token.text, @token.lang, @token.escaped)
 
       when 'table'
-        cell = ''
+        cell = []
         for o, i in @token.header
           flags =
             header: true
             align: @token.align[i]
-          cell += @renderer.tablecell @inline.output(o),
+          cell.push @renderer.tablecell @inline.output(o),
             header: true
             align: @token.align[i]
         header = @renderer.tablerow(cell)
 
-        body = ''
+        body = []
         for row, i in @token.cells
-          cell = ''
+          cell = []
           for _row, j in row
-            cell += @renderer.tablecell @inline.output(_row),
+            cell.push @renderer.tablecell @inline.output(_row),
               header: false
               align: @token.align[j]
-          body += @renderer.tablerow(cell)
+          body.push @renderer.tablerow(cell)
         @renderer.table(header, body)
 
       when 'blockquote_start'
-        body = ''
+        body = []
         while @next().type != 'blockquote_end'
-          body += @tok()
+          body.push @tok()
         @renderer.blockquote(body)
 
       when 'list_start'
         { ordered, start } = @token
-        body = ''
+        body = []
         tasklist = false
         while @next().type != 'list_end'
           if @token.checked?
             taskList = true
-          body += @tok()
+          body.push @tok()
         @renderer.list(body, ordered, start, taskList)
 
       when 'list_item_start'
-        body = ''
+        body = []
         { checked } = @token
         while @next().type != 'list_item_end'
-          body +=
-            if @token.type == 'text'
-            then @parseText()
-            else @tok()
+          if @token.type == 'text'
+          then body = [ ...body, ...@parseText() ]
+          else body.push @tok()
         @renderer.listitem(body, checked)
 
       when 'loose_item_start'
-        body = ''
+        body = []
         { checked } = @token
         while @next().type != 'list_item_end'
-          body += @tok()
+          body.push @tok()
         @renderer.listitem(body, checked)
 
       when 'html'
@@ -1146,10 +1157,14 @@ marked = (src, opt)->
     tokens = Lexer.lex(src, opt)
     return Parser.parse tokens, opt
   catch e
+    { m } = opt
     e.message += '\nPlease report this to https://github.com/7korobi/marked.'
     if (opt or marked.defaults).silent
       message = escape(e.message + '', true)
-      return "<p>An error occured:</p><pre>#{message}</pre>"
+      return m 'p', {}, [
+        "An error occured:",
+        m 'pre', {}, message
+      ]
     throw e
 
 
@@ -1160,6 +1175,12 @@ marked.setOptions = (opt)->
   marked
 
 marked.getDefaults = ->
+  m = (tag, { attrs }, children)->
+    attrs =
+      for key, val of attrs
+        " #{key}=\"#{val}\""
+    "<#{tag}#{attrs.join('')}>#{children.join('')}</#{tag}>"
+
   baseUrl: null
   breaks: false
   gfm: true
@@ -1182,6 +1203,7 @@ marked.getDefaults = ->
   indentCode: true
   taskLists: true
   tag: null
+  m: m
 
 marked.defaults = marked.getDefaults()
 
