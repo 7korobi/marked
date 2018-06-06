@@ -1,31 +1,6 @@
 ###
 # Helpers
 ###
-escape = (html, encode)->
-  amp =
-    if encode
-    then /&/g
-    else /&(?!#?\w+;)/g
-  html
-  .replace amp,  '&amp;'
-  .replace /</g, '&lt;'
-  .replace />/g, '&gt;'
-  .replace /"/g, '&quot;'
-  .replace /'/g, '&#39;'
-
-unescape = (html)->
-  # explicitly match decimal, hex, and named HTML entities
-  html.replace /&(#(?:\d+)|(?:#x[0-9A-Fa-f]+)|(?:\w+));?/ig, (_, n)->
-    n = n.toLowerCase()
-    if n == 'colon'
-      return ':'
-    if n.charAt(0) == '#'
-      if n.charAt(1) == 'x'
-        String.fromCharCode parseInt n[2..], 16
-      else
-        String.fromCharCode parseInt n[1..]
-    else
-      ''
 
 edit = (regex, opt)->
   regex = regex.source or regex
@@ -628,10 +603,10 @@ class InlineLexer
         # console.log 'autolink', cap
         src = src[cap[0].length ..]
         if cap[2] == '@'
-          text = escape @mangle cap[1]
+          text = @mangle cap[1]
           href = 'mailto:' + text
         else
-          text = escape cap[1]
+          text = cap[1]
           href = text
         out.push @outputLargeBrackets { text }, { href }
         continue
@@ -651,10 +626,10 @@ class InlineLexer
         cap[0] = @rules._backpedal.exec(cap[0])[0]
         src = src[cap[0].length ..]
         if cap[2] == '@'
-          text = escape cap[0]
+          text = cap[0]
           href = 'mailto:' + text
         else
-          text = escape cap[0]
+          text = cap[0]
           if cap[1] == 'www.'
             href = 'http://' + text
           else
@@ -674,7 +649,7 @@ class InlineLexer
           if @options.sanitize
             if @options.sanitizer
             then @options.sanitizer cap[0]
-            else escape cap[0]
+            else cap[0]
           else
             cap[0]
         )
@@ -686,7 +661,7 @@ class InlineLexer
         src = src[cap[0].length ..]
         mark = cap[0].charAt(0)
         if mark == '!'
-          text = escape cap[1]
+          text = cap[1]
         else
           @inLink = true
           text = @output cap[1]
@@ -710,7 +685,7 @@ class InlineLexer
           src = cap[0][1 .. ] + src
           continue
         if mark == '!'
-          text = escape cap[1]
+          text = cap[1]
         else
           @inLink = true
           text = @output cap[1]
@@ -781,14 +756,14 @@ class InlineLexer
       if cap = @rules.code.exec src
         # console.log 'code', cap
         src = src[cap[0].length ..]
-        out.push @renderer.codespan escape cap[2], true
+        out.push @renderer.codespan cap[2], true
         continue
 
       # text
       if cap = @rules.text.exec src
         # console.log 'text', cap
         src = src[cap[0].length ..]
-        out.push @renderer.text escape @smartypants cap[0]
+        out.push @renderer.text @smartypants cap[0]
         continue
 
       if src
@@ -797,13 +772,13 @@ class InlineLexer
 
   outputLargeBrackets: ({ mark, text }, link)->
     { href = '', title = '' } = link
-    href &&= escape href
-    title &&= escape title
+    href &&= href
+    title &&= title
 
     if @options.sanitize
       try
         prot =
-          decodeURIComponent unescape href
+          decodeURIComponent href
           .replace(/[^\w:]/g, '')
           .toLowerCase()
       catch e
@@ -858,10 +833,6 @@ class Renderer
       if out? and out != code
         escaped = true
         code = out
-    code =
-      if escaped
-      then code
-      else escape code, true
     if lang
       lang = @options.langPrefix + escape(lang, true)
       """<pre><code class="#{ lang }">#{ code }</code></pre>"""
@@ -1068,7 +1039,7 @@ class Parser
         @renderer.heading(
           @inline.output(@token.text),
           @token.depth,
-          unescape @inlineText.output(@token.text).join("")
+          @inlineText.output(@token.text).join("")
         )
 
       when 'code'
@@ -1160,7 +1131,7 @@ marked = (src, opt)->
     { m } = opt
     e.message += '\nPlease report this to https://github.com/7korobi/marked.'
     if (opt or marked.defaults).silent
-      message = escape(e.message + '', true)
+      message = "#{e.message}"
       return m 'p', {}, [
         "An error occured:",
         m 'pre', {}, message
