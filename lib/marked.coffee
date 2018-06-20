@@ -806,10 +806,10 @@ class InlineLexer
         continue
 
       # em
-      if cap = @rules.em.exec src
+      if @options.em && cap = @rules.em.exec src
         # console.log 'em', cap
         src = src[cap[0].length ..]
-        out.push @renderer.em @output cap[6] or cap[5] or cap[4] or cap[3] or cap[2] or cap[1]
+        out.push @renderer.em @output cap[6] or cap[5] or cap[4] or cap[3] or cap[2] or cap[1], cap[0][0]
         continue
 
       # sup
@@ -881,6 +881,10 @@ class InlineLexer
     if !@options.smartypants
       return text
     text
+    # markdown-it replacements
+    .replace /\+\-/g, '\u00B1'
+    # markdown-it replacements
+    .replace /\+\-/g, '\u00B1'
     # em-dashes
     .replace /---/g, '\u2014'
     # en-dashes
@@ -1287,6 +1291,7 @@ marked.getDefaults = ->
   tables: true
   xhtml: false
 
+  em: true
   ruby: false
   indentCode: true
   taskLists: true
