@@ -951,7 +951,7 @@ class Renderer
       """<h#{level}>#{ text }</h#{level}>"""
 
   hr: ->
-    '<hr>'
+    '<hr />'
 
   list: (body, ordered, start, taskList)->
     body = body.join("")
