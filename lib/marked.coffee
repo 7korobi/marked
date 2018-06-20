@@ -209,6 +209,8 @@ class Lexer
     @tokens.links = {}
     @tokens.abbrs = {}
     @rules = block.normal
+    if ! @options.indentCode
+      @rules.code = noop
     if @options.gfm
       @rules =
         if @options.tables
@@ -234,7 +236,7 @@ class Lexer
             text: cap[0]
 
       # code
-      if @options.indentCode && cap = @rules.code.exec src
+      if cap = @rules.code.exec src
         # console.log 'block code', cap
         src = src[cap[0].length ..]
         cap = cap[0].replace /^ {4}/gm, ''
@@ -481,12 +483,6 @@ inline =
       |\\[\[\]]
       |[^\[\]]
     )*)\](?:\[\])?
-  ///
-  center: ///
-    ^-(>)(
-       [^\s][\s\S]*?[^\s]
-      |[^\s]
-    )<-(?!-)
   ///
   kbd: ///
     ^(\[)\[(
@@ -781,16 +777,13 @@ class InlineLexer
         continue
 
       # kbd, strong
-      if (cap = @rules.kbd.exec src) or (cap = @rules.center.exec src) or (cap = @rules.strong.exec src)
+      if (cap = @rules.kbd.exec src) or (cap = @rules.strong.exec src)
         # console.log 'strong', cap
         src = src[cap[0].length ..]
         method = 
           switch cap[1]
             when '_', '*'
               'strong'
-            when '>'
-              # center (markdown-it)
-              'center'
             when '-'
               # strikeout (markdown-it)
               'strikeout'
@@ -1009,10 +1002,6 @@ class Renderer
 
   mdi: (name)->
     """<i class="mdi #{name}"></i>"""
-
-  center: (text)->
-    text = text.join("") if text?.join
-    """<center>#{ text }</center>"""
 
   strikeout: (text)->
     text = text.join("") if text?.join
