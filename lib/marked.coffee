@@ -175,6 +175,10 @@ block.gfm = Object.assign {}, block.normal,
   heading: /^ *(#{1,6}) +([^\n]+?) *#* *(?:\n|$)/
   abbr: /^\*\[(label)\] *\n? *: *([^\n]+?) *(?:\n|$)/
 
+block.gfm.abbr = edit(block.gfm.abbr
+)( 'label', block._label
+)()
+
 block.gfm.paragraph = edit(block.paragraph
 )( '(?!', "(?!#{
   block.gfm.fences.source.replace('\\1', '\\2')
@@ -504,6 +508,7 @@ inline =
     |^_([^\s_])_(?!_)
     |^\*([^\s*])\*(?!\*)
   ///
+  mdi: /^:(mdi-[^:]+):(?!:)/
   code: /^(`+)\s*([\s\S]*?[^`]?)\s*\1(?!`)/
   br: /^ {2,}\n(?!\s*$)/
   del: noop,
@@ -641,6 +646,8 @@ class InlineLexer
       throw new Error('Tokens array requires a `notes` property.')
     if !@links
       throw new Error('Tokens array requires a `links` property.')
+    if ! @options.em
+      @rules.em = noop
     if @options.gfm
       if @options.breaks
         @rules = inline.breaks
@@ -806,7 +813,7 @@ class InlineLexer
         continue
 
       # em
-      if @options.em && cap = @rules.em.exec src
+      if cap = @rules.em.exec src
         # console.log 'em', cap
         src = src[cap[0].length ..]
         out.push @renderer.em @output cap[6] or cap[5] or cap[4] or cap[3] or cap[2] or cap[1], cap[0][0]
@@ -831,6 +838,13 @@ class InlineLexer
         # console.log 'code', cap
         src = src[cap[0].length ..]
         out.push @renderer.codespan cap[2], true
+        continue
+
+      # mdi
+      if cap = @rules.mdi.exec src
+        # console.log 'mdi', cap
+        src = src[cap[0].length ..]
+        out.push @renderer.mdi cap[1]
         continue
 
       # text
@@ -864,9 +878,6 @@ class InlineLexer
         return text
       if prot.indexOf('javascript:') == 0 or prot.indexOf('vbscript:') == 0 or prot.indexOf('data:') == 0
         return text
-
-    if @options.ruby && ! mark && ! @rules._url_peice.exec href
-      return @renderer.ruby href, title, text
 
     if @options.baseUrl && ! originIndependentUrl.test(href)
       base = resolveUrl @options.baseUrl, href
@@ -995,6 +1006,9 @@ class Renderer
   strong: (text)->
     text = text.join("") if text?.join
     """<strong>#{ text }</strong>"""
+
+  mdi: (name)->
+    """<i class="mdi #{name}"></i>"""
 
   center: (text)->
     text = text.join("") if text?.join
@@ -1292,7 +1306,6 @@ marked.getDefaults = ->
   xhtml: false
 
   em: true
-  ruby: false
   indentCode: true
   taskLists: true
   tag: null
