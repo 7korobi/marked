@@ -491,7 +491,7 @@ inline =
     )\]\](?!\])
   ///
   strong: ///
-    ^([_~*=+:])\1(
+    ^([_~*=+:\-])\1(
        [^\s][\s\S]*?[^\s]
       |[^\s]
     )\1\1(?!\1)
@@ -507,7 +507,7 @@ inline =
   code: /^(`+)\s*([\s\S]*?[^`]?)\s*\1(?!`)/
   br: /^ {2,}\n(?!\s*$)/
   del: noop,
-  text: /^[\s\S]+?(?=[\\<!\[`*=+:]|\b_| {2,}\n|$)/
+  text: /^[\s\S]+?(?=[\\<!\[`*=+:\-]|\b_| {2,}\n|$)/
   # extended
   anker: /^\w+-\w+-\w+-\w+-\w+|-\w+-\w+-\w+|-\w+-\w+|-\w+/
   note: /^\^\[(label)\]/
@@ -784,6 +784,9 @@ class InlineLexer
             when '>'
               # center (markdown-it)
               'center'
+            when '-'
+              # strikeout (markdown-it)
+              'strikeout'
             when ':'
               # span (markdown-it)
               'span'
@@ -992,6 +995,10 @@ class Renderer
   center: (text)->
     text = text.join("") if text?.join
     """<center>#{ text }</center>"""
+
+  strikeout: (text)->
+    text = text.join("") if text?.join
+    """<s>#{ text }</s>"""
 
   span: (text)->
     text = text.join("") if text?.join
