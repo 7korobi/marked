@@ -785,6 +785,9 @@ class InlineLexer
             when '>'
               # center (markdown-it)
               'center'
+            when '+'
+              # ins (markdown-it)
+              'ins'
             when '['
               # kbd (markdown-it)
               'kbd'
@@ -987,6 +990,10 @@ class Renderer
   center: (text)->
     text = text.join("") if text?.join
     """<center>#{ text }</center>"""
+
+  ins: (text)->
+    text = text.join("") if text?.join
+    """<ins>#{ text }</ins>"""
 
   kbd: (text)->
     text = text.join("") if text?.join
