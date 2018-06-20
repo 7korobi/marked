@@ -112,6 +112,7 @@ block =
   checkbox: /^\[([ xX])\] +/
   paragraph: /^([^\n]+(?:\n(?!hr|heading|lheading| {0,3}>|<\/?(?:tag)(?: +|\n|\/?>)|<(?:script|pre|style|!--))[^\n]+)*)/
   text: /^[^\n]+/
+  abbr: noop
 
 block._label = /(?!\s*\])(?:\\[\[\]]|[^\[\]])+/
 block._title = /(?:"(?:\\"?|[^"\\])*"|'[^'\n]*(?:\n[^'\n]+)*\n?'|\([^()]*\))/
@@ -172,6 +173,7 @@ block.gfm = Object.assign {}, block.normal,
   fences: /^ *(`{3,}|~{3,})[ \.]*(\S+)? *\n([\s\S]*?)\n? *\1 *(?:\n|$)/
   paragraph: /^/
   heading: /^ *(#{1,6}) +([^\n]+?) *#* *(?:\n|$)/
+  abbr: /^\*\[(label)\] *\n? *: *([^\n]+?) *(?:\n|$)/
 
 block.gfm.paragraph = edit(block.paragraph
 )( '(?!', "(?!#{
@@ -201,6 +203,7 @@ class Lexer
     @tokens = []
     @tokens.notes = []
     @tokens.links = {}
+    @tokens.abbrs = {}
     @rules = block.normal
     if @options.gfm
       @rules =
@@ -375,6 +378,19 @@ class Lexer
             else 'html'
           pre: !@options.sanitizer and cap[1] in ['pre', 'script', 'style']
           text: cap[0]
+        continue
+
+      # abbr
+      if cap = @rules.abbr.exec src
+        # console.log 'abbr', cap
+        src = src[cap[0].length ..]
+        tag = cap[1]
+        @tokens.abbrs[tag] ||=
+          title: cap[2]
+        keys =
+          Object.keys @tokens.abbrs
+          .join("|")
+        @tokens.abbrs_reg = "(#{keys})"
         continue
 
       # def
@@ -609,7 +625,7 @@ class InlineLexer
   @escapes: (text)->
     text?.replace(InlineLexer.rules._escapes, '$1') or text
 
-  constructor: ({ @notes, @links }, options)->
+  constructor: ({ @notes, @links, @abbrs, @abbrs_reg }, options)->
     @options = options or marked.defaults
     @rules = inline.normal
     @renderer = @options.renderer or new Renderer
@@ -805,7 +821,16 @@ class InlineLexer
       if cap = @rules.text.exec src
         # console.log 'text', cap
         src = src[cap[0].length ..]
-        out.push @renderer.text @smartypants cap[0]
+        text = @smartypants cap[0]
+        if @abbrs_reg
+          for s in text.split @abbrs_reg
+            o = @links[s]
+            if o
+              out.push @renderer.abbr s, o.title
+            else
+              out.push @renderer.text s
+        else
+          out.push @renderer.text text
         continue
 
       if src
@@ -954,6 +979,10 @@ class Renderer
   kbd: (text)->
     text = text.join("") if text?.join
     """<kbd>#{ text }</kbd>"""
+
+  abbr: (text, title)->
+    text = text.join("") if text?.join
+    """<abbr title="#{title}">#{ text }</abbr>"""
 
   mark: (text)->
     text = text.join("") if text?.join
