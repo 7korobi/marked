@@ -170,7 +170,7 @@ block.normal = Object.assign {}, block
 # GFM Block Grammar
 ###
 block.gfm = Object.assign {}, block.normal,
-  fences: /^ *(`{3,}|~{3,})[ \.]*(\S+)? *\n([\s\S]*?)\n? *\1 *(?:\n|$)/
+  fences: /^ *(`{3,}|~{3,}|:{3,})[ \.]*(\S+)? *\n([\s\S]*?)\n? *\1 *(?:\n|$)/
   paragraph: /^/
   heading: /^ *(#{1,6}) +([^\n]+?) *#* *(?:\n|$)/
   abbr: /^\*\[(label)\] *\n? *: *([^\n]+?) *(?:\n|$)/
@@ -243,10 +243,18 @@ class Lexer
       if cap = @rules.fences.exec src
         # console.log 'block fences', cap
         src = src[cap[0].length ..]
-        @tokens.push
-          type: 'code'
-          lang: cap[2]
-          text: cap[3] or ''
+        mode = cap[1][0]
+        switch mode
+          when ':'
+            @tokens.push
+              type: 'container'
+              lang: cap[2]
+              text: @token cap[3], top
+          else
+            @tokens.push
+              type: 'code'
+              lang: cap[2]
+              text: cap[3] or ''
         continue
 
       # heading
@@ -483,7 +491,7 @@ inline =
     )\]\](?!\])
   ///
   strong: ///
-    ^([_~*=])\1(
+    ^([_~*=+])\1(
        [^\s][\s\S]*?[^\s]
       |[^\s]
     )\1\1(?!\1)
@@ -885,6 +893,10 @@ class InlineLexer
 class Renderer
   constructor: (@options)->
 
+  container: (text, lang)->
+    text = text.join("") if text?.join
+    """<div class="#{ lang }">#{ text }</div>"""
+
   code: (code, lang, escaped)->
     if @options.highlight
       out = @options.highlight(code, lang)
@@ -1122,6 +1134,9 @@ class Parser
           @token.depth,
           @inlineText.output(@token.text).join("")
         )
+
+      when 'container'
+        @renderer.container(@token.text, @token.lang)
 
       when 'code'
         @renderer.code(@token.text, @token.lang, @token.escaped)
