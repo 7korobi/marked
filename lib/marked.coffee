@@ -2,6 +2,35 @@
 # Helpers
 ###
 
+escape = (html, is_encode)->
+  r_encode =
+    if is_encode
+    then /&/g
+    else /&(?!#?\w+;)/g
+  html
+  .replace(r_encode, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
+unescape = (html)->
+  # explicitly match decimal, hex, and named HTML entities
+  html.replace /&(#(?:\d+)|(?:#x[0-9A-Fa-f]+)|(?:\w+));?/ig, (_, n)->
+    n = n.toLowerCase()
+    switch
+      when n == 'colon'
+        ':'
+      when n.charAt(0) == '#'
+        String.fromCharCode(
+          if n.charAt(1) == 'x'
+            parseInt( n[2..], 16 )
+          else
+            n[1..] - 0
+        )
+      else
+        ""
+
 edit = (regex, opt)->
   regex = regex.source or regex
   opt = opt or ''
@@ -23,16 +52,16 @@ resolveUrl = (base, href)->
     if /^[^:]+:\/*[^/]*$/.test(base)
       baseUrls[key] = base + '/'
     else
-      baseUrls[key] = rtrim base, '/', true
+      baseUrls[key] = base.replace(/[^/]+$/, '') # rtrim not /
   base = baseUrls[key]
 
   switch
     when href[0..1] == '//'
-      base.replace(/:[\s\S]*/, ':') + href
+      base.replace(/:[\s\S]*/, ':')
     when href.charAt(0) == '/'
-      base.replace(/(:\/*[^/]*)[\s\S]*/, '$1') + href
+      base.replace(/(:\/*[^/]*)[\s\S]*/, '$1')
     else
-      base + href
+      base
 baseUrls = {}
 originIndependentUrl = /^$|^[a-z][a-z0-9+.-]*:|^[?#]/i
 
@@ -54,27 +83,6 @@ splitCells = (tableRow, count)->
     cells[i] = o.replace(/\\\|/g, '|')
   cells
 
-# Remove trailing 'c's. Equivalent to str.replace(/c*$/, '').
-# /c*$/ is vulnerable to REDOS.
-# invert: Remove suffix of non-c chars instead. Default falsey.
-rtrim = (str, c, invert)->
-  at = str.length
-  return '' if 0 == at
-  if invert
-    while 0 <= at
-      if str[at..at] != c
-        at--
-      else
-        break
-  else
-    while 0 <= at
-      if str[at..at] == c
-        at--
-      else
-        break
-  str[0 ... at]
-
-
 ###
 # Block-Level Grammer
 ###
@@ -86,7 +94,7 @@ block =
   heading: /^ *(#{1,6}) *([^\n]+?) *(?:#+ *)?(?:\n|$)/
   table: noop
   blockquote: /^( {0,3}> ?(paragraph|[^\n]*)(?:\n|$))+/
-  list: /^( *)(bull) [\s\S]+?(?:hr|def|\n{2,}(?! )(?!\1bull )\n*|\s*$)/
+  list: /^( *)(bull)[\s\S]+?(?:hr|def|\n{2,}(?! )(?!\1bull)\n*|\s*$)/
   html: ///
     ^\ {0,3}(?: # optional indentation
     <(script|pre|style)[\s>][\s\S]*?(?:</\1>[^\n]*\n+|$) # (1)
@@ -112,9 +120,9 @@ block.def = edit(block.def
 )( 'title', block._title
 )()
 
-block.with_bullet = /^ *([*+-]|\d+\.) +/
-block.bullet = /(?:[*+-]|\d+\.)/
-block.item = /^( *)(bull) [^\n]*(?:\n(?!\1bull )[^\n]*)*/
+block.with_bullet = /^ *([*+-]|\d+\.) */
+block.bullet = /(?:[*+-] |\d+\.)/
+block.item = /^( *)(bull)[^\n]*(?:\n(?!\1bull)[^\n]*)*/
 block.item = edit(block.item, 'gm'
 )( /bull/g, block.bullet
 )()
@@ -281,6 +289,7 @@ class Lexer
         src = src[cap[0].length ..]
         @tokens.push
           type: 'blockquote_start'
+          mode: '>'
         cap = cap[0].replace /^ *> ?/gm, ''
         # Pass `top` to keep the current
         # "toplevel" state. This is exactly
@@ -445,6 +454,18 @@ inline =
       |[^\[\]]
     )*)\](?:\[\])?
   ///
+  center: ///
+    ^-(>)(
+       [^\s][\s\S]*?[^\s]
+      |[^\s]
+    )<-(?!-)
+  ///
+  kbd: ///
+    ^(\[)\[(
+       [^\s][\s\S]*?[^\s]
+      |[^\s]
+    )\]\](?!\])
+  ///
   strong: ///
     ^([_~*=])\1(
        [^\s][\s\S]*?[^\s]
@@ -461,7 +482,8 @@ inline =
   ///
   code: /^(`+)\s*([\s\S]*?[^`]?)\s*\1(?!`)/
   br: /^ {2,}\n(?!\s*$)/
-  text: /^[\s\S]+?(?=[\\<!\[`*~=\-\^]|\b_| {2,}\n|$)/
+  del: noop,
+  text: /^[\s\S]+?(?=[\\<!\[`*]|\b_| {2,}\n|$)/
 
   # extended
   anker: /^\w+-\w+-\w+-\w+-\w+|-\w+-\w+-\w+|-\w+-\w+|-\w+/
@@ -501,7 +523,12 @@ inline.tag = edit(inline.tag
 )('attribute', inline._attribute
 )()
 
-inline._label = /(?:\[[^\[\]]*\]|\\[\[\]]?|`[^`]*`|[^\[\]\\])*?/
+inline._label = ///(?:
+   \[[^\[\]]*\]
+  |\\[\[\]]?
+  |`[^`]*`
+  |[^\[\]\\]
+)*?///
 inline._href = ///
     \s*(
        <(?:
@@ -545,11 +572,20 @@ inline.normal = Object.assign({}, inline)
 # GFM Inline Grammar
 ###
 inline.gfm = Object.assign({}, inline.normal,
-  escape: edit(inline.escape)('])', '~|])')()
-  text: edit(inline.text)(']|', '~]|')('|', '|https?://|ftp://|www\\.|[a-zA-Z0-9.!#$%&\'*+/=?^_`{\\|}~-]+@|')()
-  url: edit(/^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/)('email', inline._email)()
-
+  escape: edit(
+    inline.escape
+  )('])', '~|])'
+  )()
+  url: edit(
+    /^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/
+  )('email', inline._email)(
+  )
   _backpedal: /(?:[^?!.,:;*_~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_~)]+(?!$))+/
+  text: edit(
+    inline.text
+  )(']|', '~=\^\-]|'
+  )('|', '|https?://|ftp://|www\\.|[a-zA-Z0-9.!#$%&\'*+/=?^_`{\\|}~-]+@|'
+  )()
 )
 
 ###
@@ -603,7 +639,7 @@ class InlineLexer
         # console.log 'autolink', cap
         src = src[cap[0].length ..]
         if cap[2] == '@'
-          text = @mangle cap[1]
+          text = cap[1]
           href = 'mailto:' + text
         else
           text = cap[1]
@@ -714,14 +750,20 @@ class InlineLexer
         out.push @renderer.br()
         continue
 
-      # strong
-      if cap = @rules.strong.exec src
+      # kbd, strong
+      if (cap = @rules.kbd.exec src) or (cap = @rules.center.exec src) or (cap = @rules.strong.exec src)
         # console.log 'strong', cap
         src = src[cap[0].length ..]
         method = 
           switch cap[1]
             when '_', '*'
               'strong'
+            when '>'
+              # center (markdown-it)
+              'center'
+            when '['
+              # kbd (markdown-it)
+              'kbd'
             when '~'
               # del (gfm)
               'del'
@@ -770,15 +812,11 @@ class InlineLexer
         throw new Error 'Infinite loop on byte: ' + src.charCodeAt(0)
     out
 
-  outputLargeBrackets: ({ mark, text }, link)->
-    { href = '', title = '' } = link
-    href &&= href
-    title &&= title
-
+  outputLargeBrackets: ({ mark, text }, { href = '', title = '' })->
     if @options.sanitize
       try
         prot =
-          decodeURIComponent href
+          decodeURIComponent unescape href
           .replace(/[^\w:]/g, '')
           .toLowerCase()
       catch e
@@ -786,41 +824,36 @@ class InlineLexer
       if prot.indexOf('javascript:') == 0 or prot.indexOf('vbscript:') == 0 or prot.indexOf('data:') == 0
         return text
 
-    if @options.baseUrl && ! originIndependentUrl.test(href)
-      href = resolveUrl @options.baseUrl, href
+    if @options.ruby && ! mark && ! @rules._url_peice.exec href
+      return @renderer.ruby href, title, text
 
+    if @options.baseUrl && ! originIndependentUrl.test(href)
+      base = resolveUrl @options.baseUrl, href
+    url = @renderer.url href, base
     switch mark
       when '!'
-        @renderer.image href, title, text
+        @renderer.image url, title, text
       else
-        if @options.ruby && ! @rules._url_peice.exec href
-          @renderer.ruby href, title, text
-        else
-          href = encodeURI(href).replace /%25/g, '%'
-          @renderer.link href, title, text
+        @renderer.link url, title, text
 
   smartypants: (text)->
     if !@options.smartypants
       return text
     text
-    .replace /---/g, '—'
-    .replace /--/g, '–'
-    .replace /(^|[-\u2014/(\[{"\s])'/g, '$1‘'
-    .replace /'/g, '’'
-    .replace /(^|[-\u2014/(\[{\u2018\s])"/g, '$1“'
-    .replace /"/g, '”'
-    .replace /\.{3}/g, '…'
-
-  mangle: (text)->
-    if !@options.mangle
-      return text
-    out = ''
-    for c, i in text
-      ch = text.charCodeAt(i)
-      if Math.random() > 0.5
-        ch = 'x' + ch.toString(16)
-      out += '&#' + ch + ';'
-    out
+    # em-dashes
+    .replace /---/g, '\u2014'
+    # en-dashes
+    .replace /--/g, '\u2013'
+    # opening singles
+    .replace /(^|[-\u2014/(\[{"\s])'/g, '$1\u2018'
+    # closing singles & apostrophes
+    .replace /'/g, '\u2019'
+    # opening doubles
+    .replace /(^|[-\u2014/(\[{\u2018\s])"/g, '$1\u201c'
+    # closing doubles
+    .replace /"/g, '\u201d'
+    # ellipses
+    .replace /\.{3}/g, '\u2026'
 
 
 # Renderer
@@ -833,6 +866,8 @@ class Renderer
       if out? and out != code
         escaped = true
         code = out
+    unless escaped
+      code = escape code
     if lang
       lang = @options.langPrefix + escape(lang, true)
       """<pre><code class="#{ lang }">#{ code }</code></pre>"""
@@ -848,7 +883,7 @@ class Renderer
     html
 
   heading: (text, level, raw)->
-    text = text.join("")
+    text = text.join("") if text?.join
     if @options.headerIds
       id = @options.headerPrefix + raw.toLowerCase().replace(/[^\w]+/g, '-')
       """<h#{level} id="#{ id }">#{ text }</h#{level}>"""
@@ -875,22 +910,19 @@ class Renderer
     """<#{type}#{start_at}#{classNames}>#{ body }</#{type}>"""
 
   listitem: (text, checked)->
-    text = text.join("")
+    text = text.join("") if text?.join
     if checked?
       attr =
         if checked
-        then " checked"
-        else ""
-      """<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox"#{attr}>#{text}</li>"""
+        then " checked=\"\" disabled=\"\""
+        else " disabled=\"\""
+      """<li><input#{attr} type="checkbox">#{text}</li>"""
     else
       """<li>#{ text }</li>"""
 
   paragraph: (text, is_top)->
-    text = text.join("")
-    if is_top
-      """<p>#{ text }</p>"""
-    else
-      "#{ text }"
+    text = text.join("") if text?.join
+    """<p>#{ text }</p>"""
 
   table: (header, body)->
     body = body.join("")
@@ -904,16 +936,24 @@ class Renderer
     content = content.join("")
     style =
       if flags.align
-      then """style="text-align:#{ flags.align }" """
+      then " align=\"#{ flags.align }\" "
       else ''
     if flags.header
-    then """<th #{ style }>#{ content }</th>"""
-    else """<td #{ style }>#{ content }</td>"""
+    then """<th#{ style }>#{ content }</th>"""
+    else """<td#{ style }>#{ content }</td>"""
 
   # span level renderer
   strong: (text)->
     text = text.join("") if text?.join
     """<strong>#{ text }</strong>"""
+
+  center: (text)->
+    text = text.join("") if text?.join
+    """<center>#{ text }</center>"""
+
+  kbd: (text)->
+    text = text.join("") if text?.join
+    """<kbd>#{ text }</kbd>"""
 
   mark: (text)->
     text = text.join("") if text?.join
@@ -933,10 +973,11 @@ class Renderer
 
   codespan: (text)->
     text = text.join("") if text?.join
+    text = escape text
     """<code>#{ text }</code>"""
 
   br: ->
-    '\n'
+    '<br />'
 
   del: (text)->
     text = text.join("") if text?.join
@@ -947,19 +988,29 @@ class Renderer
     """<sup class="note" title="#{ title }">#{ num }</sup>"""
 
   link: (href, title, text)->
+    href = encodeURI href
     text = text.join("") if text?.join
     if title
-    then """<a href="#{ href }" title="#{ title }">#{ text }</a>"""
-    else """<a href="#{ href }">#{ text }</a>"""
+      title = escape title
+      """<a href="#{ href }" title="#{ title }">#{ text }</a>"""
+    else
+      """<a href="#{ href }">#{ text }</a>"""
 
   image: (href, title, text)->
+    href = encodeURI href
+    text = text.join("") if text?.join
     if title
-    then """<img src="#{ href }" alt="#{ text }" title="#{ title }">"""
-    else """<img src="#{ href }" alt="#{ text }">"""
+      title = escape title
+      """<img src="#{ href }" alt="#{ text }" title="#{ title }">"""
+    else
+      """<img src="#{ href }" alt="#{ text }">"""
 
   text: (text)->
-    text = text.join("") if text?.join
+    text = escape text
     text
+
+  url: (href, base = "")->
+    decodeURIComponent "#{base}#{href}"
 
 # returns only the textual part of the token
 # no need for block level renderers
@@ -977,6 +1028,7 @@ class TextRenderer
   ruby: f_link
   image: f_link
   br: f_nop
+  url: f_nop
 
 # Parsing & Compiling
 class Parser
@@ -1067,10 +1119,11 @@ class Parser
         @renderer.table(header, body)
 
       when 'blockquote_start'
+        { mode } = @token
         body = []
         while @next().type != 'blockquote_end'
           body.push @tok()
-        @renderer.blockquote(body)
+        @renderer.blockquote(body, mode)
 
       when 'list_start'
         { ordered, start } = @token
