@@ -37,7 +37,7 @@ edit = (regex, opt)->
   self = (name, val)->
     if name
       val = val.source or val
-      val = val.replace(/(^|[^\[])\^/g, '$1')
+      val = val.replace(/(^|[^\\\[])\^/g, '$1')
       regex = regex.replace(name, val)
       self
     else
@@ -209,13 +209,15 @@ class Lexer
     @tokens.links = {}
     @tokens.abbrs = {}
     @rules = block.normal
-    if ! @options.indentCode
-      @rules.code = noop
+
     if @options.gfm
       @rules =
         if @options.tables
         then block.tables
         else block.gfm
+
+    if ! @options.indentCode
+      @rules.code = noop
 
   lex: (src)->
     src = src
@@ -401,10 +403,7 @@ class Lexer
         tag = cap[1]
         @tokens.abbrs[tag] ||=
           title: cap[2]
-        keys =
-          Object.keys @tokens.abbrs
-          .join("|")
-        @tokens.abbrs_reg = "(#{keys})"
+        @tokens.abbrs_reg = inline.words Object.keys @tokens.abbrs
         continue
 
       # def
@@ -484,18 +483,14 @@ inline =
       |[^\[\]]
     )*)\](?:\[\])?
   ///
-  kbd: ///
-    ^(\[)\[(
-       [^\s][\s\S]*?[^\s]
-      |[^\s]
-    )\]\](?!\])
+  _strong: ///
+    ^codecode(?:
+       [^code]
+      |[^code]code
+      |code[^code]
+    )+codecode(?!code)
   ///
-  strong: ///
-    ^([_~*=+:\-])\1(
-       [^\s][\s\S]*?[^\s]
-      |[^\s]
-    )\1\1(?!\1)
-  ///
+
   em: ///
      ^_([^\s][\s\S]*?[^\s_])_(?!_)
     |^_([^\s_][\s\S]*?[^\s])_(?!_)
@@ -508,12 +503,10 @@ inline =
   code: /^(`+)\s*([\s\S]*?[^`]?)\s*\1(?!`)/
   br: /^ {2,}\n(?!\s*$)/
   del: noop,
-  text: /^[\s\S]+?(?=[\\<!\[`*=+:\-]|\b_| {2,}\n|$)/
+  text: /^[\s\S]+?(?=[\\<!\[`*~=+:\-\^]|\b_| {2,}\n|$)/
   # extended
-  anker: /^\w+-\w+-\w+-\w+-\w+|-\w+-\w+-\w+|-\w+-\w+|-\w+/
   note: /^\^\[(label)\]/
-  sup: /^\^((?:[^\s^]|\^\^)+?)\^(?!\^)/
-  sub: /^~((?:[^\s~]|~~)+?)~(?!~)/
+  _supsub: /^code(?:[^\s]|codecode)+code(?!code)/
 
   _url_peice: ///
       ^$
@@ -523,6 +516,24 @@ inline =
     | ^[\w()%+:/]+$
   ///ig
 
+inline.words = (list)->
+  keys = list.map (s)-> s.replace /[-\/\\^$*+?.()|[\]{}]/g, '\\$&'
+  ///(#{ keys.join '|' })///g
+
+inline.strong =
+  for c in ['_', '~', '=', ':', '\\*', '\\+', '\\-']
+    edit(inline._strong)(/code/g, c)().source
+inline.strong.push ///
+  ^\[\[(?:
+    [^\]]|[^\]]\]|\][^\]]
+  )+\]\](?!\])
+///.source
+inline.strong = new RegExp inline.strong.join("|")
+
+inline.supsub =
+  for c in ['\\^', '~']
+    edit(inline._supsub)(/code/g, c)().source
+inline.supsub = new RegExp inline.supsub.join("|")
 
 inline._escapes = edit(inline.escape, 'g'
 )('^',''
@@ -596,10 +607,6 @@ inline.normal = Object.assign({}, inline)
 # GFM Inline Grammar
 ###
 inline.gfm = Object.assign({}, inline.normal,
-  escape: edit(
-    inline.escape
-  )('])', '~|])'
-  )()
   url: edit(
     /^((?:ftp|https?):\/\/|www\.)(?:[a-zA-Z0-9\-]+\.?)+[^\s<]*|^email/
   )('email', inline._email)(
@@ -607,7 +614,6 @@ inline.gfm = Object.assign({}, inline.normal,
   _backpedal: /(?:[^?!.,:;*_~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_~)]+(?!$))+/
   text: edit(
     inline.text
-  )(']|', '~=\^\-]|'
   )('|', '|https?://|ftp://|www\\.|[a-zA-Z0-9.!#$%&\'*+/=?^_`{\\|}~-]+@|'
   )()
 )
@@ -642,22 +648,27 @@ class InlineLexer
       throw new Error('Tokens array requires a `notes` property.')
     if !@links
       throw new Error('Tokens array requires a `links` property.')
-    if ! @options.em
-      @rules.em = noop
+
     if @options.gfm
       if @options.breaks
         @rules = inline.breaks
       else
         @rules = inline.gfm
 
+    if ! @options.em
+      @rules.em = noop
+
   output: (src)->
     out = []
+    out.plain = ""
     while src
       # escape
       if cap = @rules.escape.exec src
         # console.log 'escape', cap
         src = src[cap[0].length ..]
-        out.push cap[1]
+        text = cap[1]
+        out.push text
+        out.plain += text
         continue
 
       # autolink
@@ -671,16 +682,8 @@ class InlineLexer
           text = cap[1]
           href = text
         out.push @outputLargeBrackets { text }, { href }
+        out.plain += text
         continue
-
-      ###
-      # anker
-      if cap = @rules.anker.exec src
-        # console.log 'anker', cap
-        src = src[cap[0].length ..]
-        out.push @renderer.anker(cap[0])
-        continue
-      ###
 
       # url (gfm)
       if !@inLink and (cap = @rules.url.exec src)
@@ -697,91 +700,15 @@ class InlineLexer
           else
             href = text
         out.push @outputLargeBrackets { text }, { href }
+        out.plain += text
         continue
 
-      # tag
-      if cap = @rules.tag.exec src
-        # console.log 'tag', cap
-        if !@inLink and /^<a /i.test(cap[0])
-          @inLink = true
-        else if @inLink and /^<\/a>/i.test(cap[0])
-          @inLink = false
-        src = src[cap[0].length ..]
-        out.push (
-          if @options.sanitize
-            if @options.sanitizer
-            then @options.sanitizer cap[0]
-            else cap[0]
-          else
-            cap[0]
-        )
-        continue
-
-      # link
-      if cap = @rules.link.exec src
-        # console.log 'link', cap
-        src = src[cap[0].length ..]
-        mark = cap[0].charAt(0)
-        if mark == '!'
-          text = cap[1]
-        else
-          @inLink = true
-          text = @output cap[1]
-          @inLink = false
-
-        href = InlineLexer.escapes cap[2].trim().replace /^<([\s\S]*)>$/, '$1'
-        title = InlineLexer.escapes cap[3]?.slice(1, -1) or ''
-
-        out.push @outputLargeBrackets { mark, text }, { href, title }
-        continue
-
-      # reflink, nolink
-      if (cap = @rules.reflink.exec src) or (cap = @rules.nolink.exec src)
-        # console.log 'ref|no link', cap
-        src = src[cap[0].length ..]
-        mark = cap[0].charAt(0)
-        link = (cap[2] or cap[1]).replace(/\s+/g, ' ')
-        link = @links[link.toLowerCase()]
-        unless link?.href
-          out.push mark
-          src = cap[0][1 .. ] + src
-          continue
-        if mark == '!'
-          text = cap[1]
-        else
-          @inLink = true
-          text = @output cap[1]
-          @inLink = false
-        out.push @outputLargeBrackets { mark, text }, link
-        continue
-
-      # note
-      if cap = @rules.note.exec src
-        # console.log 'note', cap
-        src = src[cap[0].length ..]
-
-        @inLink = true
-        text = @output cap[1]
-        @inLink = false
-
-        @notes.push o = { text } 
-        o.href = '#' + num = @notes.length
-        out.push @renderer.note num, text
-        continue
-
-      # br
-      if cap = @rules.br.exec src
-        # console.log 'br', cap
-        src = src[cap[0].length ..]
-        out.push @renderer.br()
-        continue
-
-      # kbd, strong
-      if (cap = @rules.kbd.exec src) or (cap = @rules.strong.exec src)
+      # strong
+      if cap = @rules.strong.exec src
         # console.log 'strong', cap
         src = src[cap[0].length ..]
         method = 
-          switch cap[1]
+          switch cap[0][1]
             when '_', '*'
               'strong'
             when '-'
@@ -802,28 +729,115 @@ class InlineLexer
             when '='
               # Mark (markdown preview enhanced extended syntax)
               'mark'
-        out.push @renderer[method] @output cap[2]
+        text = @output cap[0][2...-2]
+        out.push @renderer[method] text
+        out.plain += text.plain
+        continue
+
+      # tag
+      if cap = @rules.tag.exec src
+        # console.log 'tag', cap
+        if !@inLink and /^<a /i.test(cap[0])
+          @inLink = true
+        else if @inLink and /^<\/a>/i.test(cap[0])
+          @inLink = false
+        src = src[cap[0].length ..]
+        text = cap[0]
+        out.plain += text
+        out.push (
+          if @options.sanitize
+            if @options.sanitizer
+            then @options.sanitizer text
+            else text
+          else
+            text
+        )
+        continue
+
+      # link
+      if cap = @rules.link.exec src
+        # console.log 'link', cap
+        src = src[cap[0].length ..]
+        mark = cap[0].charAt(0)
+        if mark == '!'
+          text = cap[1]
+        else
+          @inLink = true
+          text = @output cap[1]
+          @inLink = false
+
+        href = InlineLexer.escapes cap[2].trim().replace /^<([\s\S]*)>$/, '$1'
+        title = InlineLexer.escapes cap[3]?.slice(1, -1) or ''
+
+        out.push @outputLargeBrackets { mark, text }, { href, title }
+        out.plain += text.plain
+        continue
+
+      # reflink, nolink
+      if (cap = @rules.reflink.exec src) or (cap = @rules.nolink.exec src)
+        # console.log 'ref|no link', cap
+        src = src[cap[0].length ..]
+        mark = cap[0].charAt(0)
+        link = (cap[2] or cap[1]).replace(/\s+/g, ' ')
+        link = @links[link.toLowerCase()]
+        unless link?.href
+          out.push mark
+          out.plain += mark
+          src = cap[0][1 .. ] + src
+          continue
+        @inLink = true
+        text = @output cap[1]
+        @inLink = false
+        out.push @outputLargeBrackets { mark, text }, link
+        out.plain += text.plain
+        continue
+
+      # note
+      if cap = @rules.note.exec src
+        # console.log 'note', cap
+        src = src[cap[0].length ..]
+        text = @output cap[1]
+
+        @notes.push o = { text }
+        o.href = '#' + num = @notes.length
+        out.push @renderer.note num, text, text.plain
+        out.plain += text.plain
+        continue
+
+      # br
+      if cap = @rules.br.exec src
+        # console.log 'br', cap
+        src = src[cap[0].length ..]
+        out.push @renderer.br()
+        out.plain += "\n"
         continue
 
       # em
       if cap = @rules.em.exec src
         # console.log 'em', cap
         src = src[cap[0].length ..]
-        out.push @renderer.em @output cap[6] or cap[5] or cap[4] or cap[3] or cap[2] or cap[1], cap[0][0]
+        text = cap[6] or cap[5] or cap[4] or cap[3] or cap[2] or cap[1]
+        text = @output text, cap[0][0]
+        out.push @renderer.em text
+        out.plain += text.plain
         continue
 
-      # sup
-      if cap = @rules.sup.exec src
-        # console.log 'sup', cap
+      # sup, sub
+      if cap = @rules.supsub.exec src
+        # console.log 'supsub', cap
         src = src[cap[0].length ..]
-        out.push @renderer.sup @output cap[1]
-        continue
+        method = 
+          switch cap[0][0]
+            when '^'
+              # sup (markdown-it)
+              'sup'
+            when '~'
+              # sub (markdown-it)
+              'sub'
 
-      # sub
-      if cap = @rules.sub.exec src
-        # console.log 'sub', cap
-        src = src[cap[0].length ..]
-        out.push @renderer.sub @output cap[1]
+        text = @output cap[0][1...-1]
+        out.push @renderer[method] text, text.plain
+        out.plain += text.plain
         continue
 
       # code
@@ -831,6 +845,7 @@ class InlineLexer
         # console.log 'code', cap
         src = src[cap[0].length ..]
         out.push @renderer.codespan cap[2], true
+        out.plain += cap[2]
         continue
 
       # mdi
@@ -838,20 +853,23 @@ class InlineLexer
         # console.log 'mdi', cap
         src = src[cap[0].length ..]
         out.push @renderer.mdi cap[1]
+        out.plain += "@"
         continue
 
       # text
       if cap = @rules.text.exec src
         # console.log 'text', cap
         src = src[cap[0].length ..]
-        text = @smartypants cap[0]
+        text = cap[0]
+        out.plain += text
         if @abbrs_reg
           for s in text.split @abbrs_reg
-            o = @links[s]
+            o = @abbrs[s]
+            text = @smartypants s
             if o
-              out.push @renderer.abbr s, o.title
+              out.push @renderer.abbr text, o.title
             else
-              out.push @renderer.text s
+              out.push @renderer.text text
         else
           out.push @renderer.text text
         continue
@@ -1051,7 +1069,7 @@ class Renderer
     text = text.join("") if text?.join
     """<del>#{ text }</del>"""
 
-  note: (num, title)->
+  note: (num, text, title)->
     text = text.join("") if text?.join
     """<sup class="note" title="#{ title }">#{ num }</sup>"""
 
@@ -1080,23 +1098,6 @@ class Renderer
   url: (href, base = "")->
     decodeURIComponent "#{base}#{href}"
 
-# returns only the textual part of the token
-# no need for block level renderers
-class TextRenderer
-  f_nop = -> ''
-  f_text = (text)-> text
-  f_link = (href, title, text)-> "#{text}"
-  strong: f_text
-  em: f_text
-  codespan: f_text
-  del: f_text
-  text: f_text
-  note: f_text
-  link: f_link
-  ruby: f_link
-  image: f_link
-  br: f_nop
-  url: f_nop
 
 # Parsing & Compiling
 class Parser
@@ -1111,9 +1112,6 @@ class Parser
   parse: (src)->
     { m } = @options
     @inline = new InlineLexer src, @options
-    # use an InlineLexer with a TextRenderer to extract pure text
-    @inlineText = new InlineLexer src, Object.assign {}, @options,
-      renderer: new TextRenderer
     @tokens = src.reverse()
     out = []
     while @next()
@@ -1143,7 +1141,7 @@ class Parser
       body += '\n' + @next().text
     @inline.output body
 
-  ###*
+  ###
   # Parse Current Token
   ###
 
@@ -1156,10 +1154,11 @@ class Parser
         @renderer.hr()
 
       when 'heading'
+        text = @inline.output(@token.text)
         @renderer.heading(
-          @inline.output(@token.text),
+          text,
           @token.depth,
-          @inlineText.output(@token.text).join("")
+          text.plain
         )
 
       when 'container'
@@ -1309,7 +1308,6 @@ marked.Parser = Parser
 marked.parser = Parser.parse
 
 marked.Renderer = Renderer
-marked.TextRenderer = TextRenderer
 
 marked.Lexer = Lexer
 marked.lexer = Lexer.lex
